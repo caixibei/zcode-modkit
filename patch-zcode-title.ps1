@@ -21,7 +21,8 @@
 # - Exits automatically on success; pauses only on errors
 # Revert with restore-zcode-title.bat
 param(
-    [switch]$NoRestart   # toolbox mode: do not relaunch ZCode after patching
+    [switch]$NoRestart,   # toolbox mode: do not relaunch ZCode after patching
+    [string]$TargetCjs    # advanced/testing: operate on this zcode.cjs instead of the auto-located one (skips the running check)
 )
 $ErrorActionPreference = 'Stop'
 $latin1 = [System.Text.Encoding]::GetEncoding(28591)  # lossless byte<->char round-trip (all patch strings are pure ASCII)
@@ -111,11 +112,19 @@ if (-not $glmDir) {
 $cjsPath  = Join-Path $glmDir 'zcode.cjs'
 $zcodeExe = Join-Path (Split-Path (Split-Path $cjsPath -Parent) -Parent) 'ZCode.exe'
 if (-not (Test-Path $zcodeExe)) { $zcodeExe = $null }
-Write-Host "target: $cjsPath"
+if ($TargetCjs) {
+    # explicit override (toolbox/testing): operate on the given file and skip
+    # the running-process guard, so the caller controls those concerns
+    $cjsPath = $TargetCjs
+    $zcodeExe = $null
+    Write-Host "target (override): $cjsPath"
+} else {
+    Write-Host "target: $cjsPath"
+}
 
 # 0) ZCode must not be running (zcode.cjs is memory-mapped/locked by worker processes)
 $procs = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue
-if ($procs) {
+if ($procs -and -not $TargetCjs) {
     Write-Host '[X] ZCode is running, zcode.cjs is locked.' -ForegroundColor Red
     Write-Host '    Quit ZCode first (right-click tray icon -> Quit; clicking X may only minimize to tray).' -ForegroundColor Yellow
     Read-Host 'Press Enter to exit'
@@ -131,6 +140,28 @@ $cOldLang = Count-Str $text $oldLang
 $cNewLang = Count-Str $text $newLang
 $isLangClean   = ($cOldLang -eq 1)
 $isLangPatched = ($cNewLang -eq 1)
+
+# upstream-fixed check (ZCode 3.14.3+): the fix shipped upstream is byte-identical
+# to this kit's patched form, so a patched-pair match with the strengthened language
+# rule and no weak rule means the fix is ALREADY present (upstream or kit) and the
+# kit must not touch the file — "restoring" here would reintroduce the bug.
+if ($isLangPatched -and -not $isLangClean) {
+    foreach ($v in $versions) {
+        $ua, $ub = New-PatchedPair $v.eligA $v.eligB
+        if ((Count-Str $text $ua) -eq 1 -and (Count-Str $text $ub) -eq 1) {
+            Write-Host "[1/4] title fix already present (shipped upstream in this ZCode build or applied by this kit); nothing to patch."
+            if ($NoRestart) {
+                Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
+            } elseif ($zcodeExe) {
+                Start-Process $zcodeExe
+                Write-Host '[4/4] ZCode restarted.'
+            } else {
+                Write-Host '[4/4] done. Start ZCode manually.'
+            }
+            exit 0
+        }
+    }
+}
 
 $sig = $null; $sigTag = ''; $state = 'unknown'
 $counts = @()
@@ -185,6 +216,20 @@ if ($state -eq 'unpatched') {
     $baseText = Get-CleanBaseline $sig
 } else {
     throw "unknown zcode.cjs state (lang=$cOldLang/$cNewLang; $($counts -join ' ')). ZCode version changed? Update the signature table in this script. Refusing."
+}
+
+# baseline must belong to the SAME zcode.cjs generation as the target file:
+# a same-length difference outside the known patch windows means the backup was
+# taken from a different version (or carries foreign patches) and must not be
+# promoted to the baseline of this file
+if ($baseText.Length -ne $text.Length) {
+    # the language rule shifts length by exactly $langDelta; anything else is a
+    # version mismatch (e.g. -TargetCjs pointing at another install)
+    Write-Host "[X] backup baseline length $($baseText.Length) != target length $($text.Length) (allowed delta: $langDelta)." -ForegroundColor Red
+    Write-Host '    The backup belongs to a different ZCode build; refusing to reuse or overwrite it.' -ForegroundColor Red
+    Write-Host '    Delete the stale zcode.cjs.title-backup files to let this script take a fresh baseline.' -ForegroundColor Yellow
+    Read-Host 'Press Enter to exit'
+    exit 1
 }
 
 $baseBytes = $latin1.GetBytes($baseText)

@@ -1,8 +1,14 @@
-# Revert ZCode session title patch (v3, portable): restore clean zcode.cjs from backup and restart
+# Revert ZCode session title patch (v3, portable)
+# v4 behavior: prefer reversing the patched fragments in the CURRENT zcode.cjs
+# in place (equal-length), so a coexisting usage-retention patch (different byte
+# region of the same file) survives; the clean whole-file backup is only used as
+# a fallback when the in-place path cannot apply. The usage patch has its own
+# reverse path, so whole-file overwrite would silently erase it.
 # Auto-locates ZCode install; every probe is fault-tolerant.
 # Signature table mirrors patch-zcode-title.ps1 (3.14.1 / 3.12.3).
 param(
-    [switch]$NoRestart   # toolbox mode: do not relaunch ZCode after restoring
+    [switch]$NoRestart,   # toolbox mode: do not relaunch ZCode after restoring
+    [string]$TargetCjs    # advanced/testing: operate on this zcode.cjs instead of the auto-located one (skips the running check)
 )
 $ErrorActionPreference = 'Stop'
 
@@ -22,6 +28,7 @@ $versions = @(
     }
 )
 $oldLang = "- Use the user's primary language."
+$newLang = "- MUST use the user's primary language."
 
 function Find-ZCodeDir {
     try {
@@ -65,10 +72,18 @@ if (-not $glmDir) {
 $cjsPath  = Join-Path $glmDir 'zcode.cjs'
 $zcodeExe = Join-Path (Split-Path (Split-Path $cjsPath -Parent) -Parent) 'ZCode.exe'
 if (-not (Test-Path $zcodeExe)) { $zcodeExe = $null }
-Write-Host "target: $cjsPath"
+if ($TargetCjs) {
+    # explicit override (toolbox/testing): operate on the given file and skip
+    # the running-process guard, so the caller controls those concerns
+    $cjsPath = $TargetCjs
+    $zcodeExe = $null
+    Write-Host "target (override): $cjsPath"
+} else {
+    Write-Host "target: $cjsPath"
+}
 
 $procs = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue
-if ($procs) {
+if ($procs -and -not $TargetCjs) {
     Write-Host '[X] ZCode is running. Quit it from the tray icon first, then run this script again.' -ForegroundColor Red
     Read-Host 'Press Enter to exit'
     exit 1
@@ -93,8 +108,28 @@ if (Test-Path $hashPath) {
 
 # the backup must match a clean original of a KNOWN version (all fragments exactly once)
 $latin1 = [System.Text.Encoding]::GetEncoding(28591)
+$ct = $latin1.GetString([System.IO.File]::ReadAllBytes($cjsPath))
+
+# upstream-fixed check (ZCode 3.14.3+): the fix shipped upstream is byte-identical
+# to this kit's patched form. Reversing it would REINTRODUCE the bug — refuse.
+foreach ($v in $versions) {
+    $filler0 = '/*' + ('x' * 23) + '*/'
+    $ua = $v.eligA.Replace('||!e.config.titleGeneration', '').Replace('{if(', '{' + $filler0 + 'if(')
+    $ub = $v.eligB.Replace('||!e.config.titleGeneration', '').Replace('{return ', '{' + $filler0 + 'return ')
+    $cUa = ([regex]::Matches($ct, [regex]::Escape($ua))).Count
+    $cUb = ([regex]::Matches($ct, [regex]::Escape($ub))).Count
+    if ($cUa -eq 1 -and $cUb -eq 1) {
+        Write-Host '[X] this zcode.cjs carries the title fix SHIPPED UPSTREAM (byte-identical to this kit'"'"'s patch form).' -ForegroundColor Red
+        Write-Host '    There is nothing from this kit to restore here; reversing would reintroduce the title bug.' -ForegroundColor Yellow
+        Write-Host '    If you really want the bug back, reinstall ZCode — this toolkit will not do it.' -ForegroundColor Yellow
+        Read-Host 'Press Enter to exit'
+        exit 1
+    }
+}
+
 $bt = $latin1.GetString([System.IO.File]::ReadAllBytes($backupPath))
 $matched = $false
+$matchedVersion = $null
 foreach ($v in $versions) {
     $ca = ([regex]::Matches($bt, [regex]::Escape($v.eligA))).Count
     $cb = ([regex]::Matches($bt, [regex]::Escape($v.eligB))).Count
@@ -102,6 +137,7 @@ foreach ($v in $versions) {
     if ($ca -eq 1 -and $cb -eq 1 -and $cl -eq 1) {
         Write-Host "[OK] backup matches clean original of ZCode $($v.tag)."
         $matched = $true
+        $matchedVersion = $v
         break
     }
 }
@@ -111,8 +147,45 @@ if (-not $matched) {
     exit 1
 }
 
-Copy-Item $backupPath $cjsPath -Force
-Write-Host '[OK] zcode.cjs restored.'
+# v4: preferred path — reverse the patched fragments in the CURRENT file in
+# place (equal-length), so a coexisting usage-retention patch survives. The
+# current file must still carry THIS kit's patched fragments; anything else
+# (unknown state) falls through to the whole-file backup restore.
+$ct = $latin1.GetString([System.IO.File]::ReadAllBytes($cjsPath))
+$restored = $false
+$patchedA, $patchedB = $null, $null
+if ($matchedVersion -eq $null) { throw 'internal: matched version not captured' }
+# rebuild the patched forms for the matched version (same filler as the patch script)
+$filler = '/*' + ('x' * 23) + '*/'
+$patchedA = $matchedVersion.eligA.Replace('||!e.config.titleGeneration', '').Replace('{if(', '{' + $filler + 'if(')
+$patchedB = $matchedVersion.eligB.Replace('||!e.config.titleGeneration', '').Replace('{return ', '{' + $filler + 'return ')
+$cPa = ([regex]::Matches($ct, [regex]::Escape($patchedA))).Count
+$cPb = ([regex]::Matches($ct, [regex]::Escape($patchedB))).Count
+$cPl = ([regex]::Matches($ct, [regex]::Escape($newLang))).Count
+$cCl = ([regex]::Matches($ct, [regex]::Escape($oldLang))).Count
+# language fragment may be patched (+5 bytes) or clean; both mean the title
+# patch is present in the current file and can be reversed in place
+if (($cPa -eq 1 -and $cPb -eq 1) -and (($cPl -eq 1 -and $cCl -eq 0) -or ($cPl -eq 0 -and $cCl -eq 1))) {
+    $curPatchedA = $patchedA
+    $curPatchedB = $patchedB
+    if ($cPl -eq 1) { $curPatchedA = $curPatchedA.Replace($oldLang, $newLang); $curPatchedB = $curPatchedB.Replace($oldLang, $newLang) }
+    $nt = $ct.Replace($curPatchedA, $matchedVersion.eligA).Replace($curPatchedB, $matchedVersion.eligB).Replace($newLang, $oldLang)
+    # sanity: after reversal the current file must contain all three clean fragments exactly once
+    if (([regex]::Matches($nt, [regex]::Escape($matchedVersion.eligA))).Count -eq 1 -and
+        ([regex]::Matches($nt, [regex]::Escape($matchedVersion.eligB))).Count -eq 1 -and
+        ([regex]::Matches($nt, [regex]::Escape($oldLang))).Count -eq 1) {
+        [System.IO.File]::WriteAllBytes($cjsPath, $latin1.GetBytes($nt))
+        $restored = $true
+        Write-Host '[OK] title fragments reversed in place (other patches preserved).'
+    }
+}
+if (-not $restored) {
+    Write-Host '[..] in-place reversal not applicable (current file lacks recognizable title-patch fragments).'
+    Write-Host '     Falling back to whole-file backup restore — NOTE: patches applied after the backup'
+    Write-Host '     (e.g. the usage-retention patch) are erased by this path; re-apply them afterwards.'
+    Copy-Item $backupPath $cjsPath -Force
+    Write-Host '[OK] zcode.cjs restored.'
+}
 if ($NoRestart) {
     Write-Host '[OK] done (NoRestart: leave ZCode closed).'
 } elseif ($zcodeExe) {
