@@ -85,10 +85,14 @@ function Hash-Bytes([byte[]]$b) {
     try { return (($sha.ComputeHash($b) | ForEach-Object { $_.ToString('X2') }) -join '') } finally { $sha.Dispose() }
 }
 function Find-ZCodeDir {
-    # returns the install dir containing ZCode.exe (parent of resources\glm)
+    # returns the resources\glm dir (the folder containing zcode.cjs); every
+    # branch must agree on this convention or the main path joins break
     try {
         $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
-        if ($p) { return Split-Path (Split-Path $p.Path -Parent) -Parent }
+        if ($p) {
+            $cand = Join-Path (Split-Path $p.Path -Parent) 'resources\glm\zcode.cjs'
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+        }
     } catch {}
     $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
               'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -98,7 +102,7 @@ function Find-ZCodeDir {
             $hit = Get-ItemProperty $k -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*ZCode*' -and $_.InstallLocation } | Select-Object -First 1
             if ($hit) {
                 $cand = Join-Path $hit.InstallLocation 'resources\glm\zcode.cjs'
-                if (Test-Path $cand) { return (Split-Path (Split-Path $cand -Parent) -Parent) }
+                if (Test-Path $cand) { return (Split-Path $cand -Parent) }
             }
         } catch {}
     }
@@ -107,15 +111,15 @@ function Find-ZCodeDir {
         try {
             if (-not (Test-Path $d)) { continue }
             $cand = Join-Path $d 'resources\glm\zcode.cjs'
-            if (Test-Path $cand) { return (Split-Path (Split-Path $cand -Parent) -Parent) }
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
         } catch { continue }
     }
     return $null
 }
 
 # ================= main =================
-$installDir = Find-ZCodeDir
-if (-not $installDir) {
+$glmDir = Find-ZCodeDir
+if (-not $glmDir) {
     Write-Host '[?] Could not auto-locate ZCode. Example: D:\installer\zcode\resources\glm' -ForegroundColor Yellow
     $manual = Read-Host 'Enter the folder that contains zcode.cjs (resources\glm dir)'
     if (-not $manual -or -not (Test-Path (Join-Path $manual 'zcode.cjs'))) {
@@ -123,10 +127,11 @@ if (-not $installDir) {
         Read-Host 'Press Enter to exit'
         exit 1
     }
-    $installDir = $manual
+    $glmDir = $manual
 }
-$cjsPath  = Join-Path $installDir 'resources\glm\zcode.cjs'
-$zcodeExe = Join-Path $installDir 'ZCode.exe'
+$cjsPath = Join-Path $glmDir 'zcode.cjs'
+# zcode.cjs -> resources\glm -> resources -> install dir containing ZCode.exe
+$zcodeExe = Join-Path (Split-Path (Split-Path (Split-Path $cjsPath -Parent) -Parent) -Parent) 'ZCode.exe'
 if (-not (Test-Path $zcodeExe)) { $zcodeExe = $null }
 if ($TargetCjs) {
     # explicit override (toolbox/testing): operate on the given file and skip

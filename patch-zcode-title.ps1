@@ -68,10 +68,14 @@ function New-PatchedPair([string]$a, [string]$b) {
 }
 
 function Find-ZCodeDir {
-    # 1) running process path
+    # returns the resources\glm dir (the folder containing zcode.cjs); every
+    # branch must agree on this convention or the main path joins break
     try {
         $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
-        if ($p) { return Split-Path (Split-Path $p.Path -Parent) -Parent }
+        if ($p) {
+            $cand = Join-Path (Split-Path $p.Path -Parent) 'resources\glm\zcode.cjs'
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+        }
     } catch {}
     # 2) registry uninstall entries (32/64-bit + per-user)
     $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -109,8 +113,9 @@ if (-not $glmDir) {
     }
     $glmDir = $manual
 }
-$cjsPath  = Join-Path $glmDir 'zcode.cjs'
-$zcodeExe = Join-Path (Split-Path (Split-Path $cjsPath -Parent) -Parent) 'ZCode.exe'
+$cjsPath = Join-Path $glmDir 'zcode.cjs'
+# zcode.cjs -> resources\glm -> resources -> install dir containing ZCode.exe
+$zcodeExe = Join-Path (Split-Path (Split-Path (Split-Path $cjsPath -Parent) -Parent) -Parent) 'ZCode.exe'
 if (-not (Test-Path $zcodeExe)) { $zcodeExe = $null }
 if ($TargetCjs) {
     # explicit override (toolbox/testing): operate on the given file and skip
