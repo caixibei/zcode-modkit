@@ -20,7 +20,7 @@
 ![GitHub code size](https://img.shields.io/github/languages/code-size/caixibei/zcode-modkit)
 ![GitHub file count](https://img.shields.io/github/directory-file-count/caixibei/zcode-modkit)
 
-ZCode 桌面客户端补丁工具包，包含六个独立补丁与一个统一工具箱入口：
+ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一工具箱入口：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
 2. **会话标题自动生成修复补丁**（`patch-zcode-title`）——恢复 3.12.3 中失效的侧边栏会话标题自动提炼（3.14.3 起官方已修复，脚本自动识别并跳过）
@@ -28,8 +28,9 @@ ZCode 桌面客户端补丁工具包，包含六个独立补丁与一个统一�
 4. **更新检查禁用补丁**（`patch-zcode-updates`）——彻底关闭自动更新检测，侧边栏不再出现绿色「更新」徽标；想升级时自行下载安装包
 5. **定时任务时区修复补丁**（`patch-zcode-timezone`）——让 ZCode 的 cron 定时任务按上海时间（UTC+8）触发，修复系统级 `TZ=UTC` 环境变量造成的 8 小时偏差
 6. **用量历史保留补丁**（`patch-zcode-usage`）——停用用量统计的 30 天滚动清理，「累计 Token 数」跨月持续累加不再缩水
+7. **挡位壁纸补丁**（`patch-zcode-wallpaper-gear`）——壁纸跟随输入框「思考级别」自动切换：低/高/最高各配一张图，纯 CSS 实现，切档即时换图
 
-**统一工具箱**（`zcode-toolbox.bat`）：把 6 个补丁 + 6 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。四个 asar 补丁（字体 / 标题 / 壁纸 / 禁更新）全部基于**当前 asar 原位操作**，打/还原/换图互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 / 用量保留）同样基于**当前文件原位等长替换**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）。
+**统一工具箱**（`zcode-toolbox.bat`）：把 7 个补丁 + 7 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。五个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新）全部基于**当前 asar 原位操作**，打/还原/换图互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 / 用量保留）同样基于**当前文件原位等长替换**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）。
 
 ---
 
@@ -38,8 +39,8 @@ ZCode 桌面客户端补丁工具包，包含六个独立补丁与一个统一�
 1. 完全退出 ZCode（托盘图标右键 → Quit）
 2. 双击 `zcode-toolbox.bat`
 3. 在菜单里输入任务编号（可多选，空格或逗号分隔）：
-   - `[1]` 字体补丁 `[2]` 标题修复 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[9]` 时区修复
-   - `[5]` 还原字体 `[6]` 还原标题 `[7]` 还原壁纸 `[8]` 恢复更新检查 `[10]` 还原时区
+   - `[1]` 字体补丁 `[2]` 标题修复 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[9]` 时区修复 `[13]` 挡位壁纸
+   - `[5]` 还原字体 `[6]` 还原标题 `[7]` 还原壁纸 `[8]` 恢复更新检查 `[10]` 还原时区 `[14]` 还原挡位壁纸
 4. 确认后按序执行；某任务失败立即停止后续任务（已完成的任务保持其状态），修好后再跑一次即可
 5. 全部成功后自动重启一次 ZCode
 
@@ -47,8 +48,8 @@ ZCode 桌面客户端补丁工具包，包含六个独立补丁与一个统一�
 
 任务编号清单：
 
-- 打补丁：`[1]` 字体 `[2]` 标题修复 `[3]` 壁纸 `[4]` 禁用更新检查 `[9]` 时区修复 `[11]` 用量历史保留
-- 还原：`[5]` 字体 `[6]` 标题 `[7]` 壁纸 `[8]` 更新检查 `[10]` 时区 `[12]` 用量清理
+- 打补丁：`[1]` 字体 `[2]` 标题修复 `[3]` 壁纸 `[4]` 禁用更新检查 `[9]` 时区修复 `[11]` 用量历史保留 `[13]` 挡位壁纸
+- 还原：`[5]` 字体 `[6]` 标题 `[7]` 壁纸 `[8]` 更新检查 `[10]` 时区 `[12]` 用量清理 `[14]` 挡位壁纸
 
 ### 互不影响保证
 
@@ -57,6 +58,8 @@ ZCode 桌面客户端补丁工具包，包含六个独立补丁与一个统一�
 - 字体补丁：在当前 asar 上等长替换字体栈（不从备份重算全文）；
 - 壁纸补丁：在当前 asar 上「剥旧块 → 加新块」后重打包（不从备份重建整包）；还原时优先原位剥块；
 - 禁更新补丁：在当前 asar 上 25 字节等长替换；还原时优先原位反替换。
+
+挡位壁纸补丁（第七章）与桌面壁纸补丁同为 CSS 追加块，但使用**独立标记**（`ZCODE-GWP-*` vs `ZCODE-WALLPAPER-*`）与**独立备份**（`app.asar.gwp-backup` vs `app.asar.wallpaper-backup`），各自的打补丁 / 换图 / 还原只识别和剥除自己的块，两个壁纸补丁可共存。
 
 两个 `zcode.cjs` 补丁（标题 / 用量保留）修改同一文件的不同字节区域，同样全部**原位等长替换**：打补丁把补丁写到当前文件上，还原优先在当前文件上反替换补丁片段（备份整文件覆盖仅作兜底，且仅当当前文件无法识别补丁痕迹时使用）。因此任意顺序叠加、重打或逐一还原，其余补丁始终保持完好。
 
@@ -311,6 +314,46 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 ---
 
+## 七、挡位壁纸补丁（思考级别联动）
+
+壁纸跟随输入框工具栏的「思考级别」下拉（低 / 高 / 最高）自动切换：每一档配一张图，切换档位的瞬间背景即时更换。纯 CSS 实现——ZCode 渲染层有一个隐藏状态节点实时携带当前档位属性（`data-thought="..."`），补丁向渲染层 CSS 追加一段基于 `:has()` 选择器的规则块，React 更新属性时浏览器自动重新匹配，**不注入任何 JavaScript**。
+
+**档位与图片映射**：图片放 `images/` 目录，命名 `M1`–`M4`（jpg / jpeg / png / bmp 均可），脚本按现有文件自动选择映射方案：
+
+| 文件 | 4 张图（M1–M4） | 3 张图（M1–M3） |
+| --- | --- | --- |
+| `M1.*` | 挡 1：关闭思考（off、nothink） | 挡 1：关闭 + 低（off、nothink、minimal、low） |
+| `M2.*` | 挡 2：低（minimal、low） | 挡 2：高（medium、high） |
+| `M3.*` | 挡 3：高（medium、high） | 挡 3：最高（xhigh、max、ultra），兼兜底 |
+| `M4.*` | 挡 4：最高（xhigh、max、ultra），兼兜底 | — |
+
+- **最后一张图永远是兜底背景**：未开思考或识别不到档位时显示它，桌面不会空白；
+- 张数 3–4 张任意；超过 4 张只取前 4 张（ZCode 一共 4 组档位值）；
+- 换图只需替换同名文件后重跑补丁。
+
+**打补丁 / 换图**
+
+1. 完全退出 ZCode（托盘图标右键 → Quit）
+2. 双击 `patch-zcode-wallpaper-gear.bat`（或 `zcode-toolbox.bat` 选 `[13]`）
+3. 确认菜单列出的档位 → 文件映射，输入纱浓度（0–85，默认 60，含义与桌面壁纸补丁相同）
+4. 完成后自动重启 ZCode；切换思考级别即可看到背景切换
+
+**还原**
+
+1. 完全退出 ZCode
+2. 双击 `restore-zcode-wallpaper-gear.bat`（或工具箱选 `[14]`）：从当前 asar 原位剥除挡位壁纸块，字体 / 静态壁纸 / 禁更新等其它补丁全部保留
+
+**工作原理与安全机制**
+
+- **asar 重打包**：与桌面壁纸补丁同技术——解包 → 剥旧块 → 追加新 CSS 块 → 重算偏移 → 重打包，其余 27000+ 文件逐字节不变（已实测比对，产物通过官方 `@electron/asar` 读取验证，并在隔离副本上完成真实启动验证）。
+- **独立标记与备份**：CSS 块用 `ZCODE-GWP-GEAR-WALLPAPER-BEGIN/END` 标记，备份文件为 `app.asar.gwp-backup` + SHA-256 指纹，与桌面壁纸补丁（`ZCODE-WALLPAPER-*` / `app.asar.wallpaper-backup`）完全隔离，可共存、可分别还原。
+- **幂等与状态识别**：重复运行自动换图换浓度；损坏块拒绝执行并提示先还原。
+- **版本保护**：找不到渲染层 CSS（`out/renderer/assets/styles-C8Nayk5k.css`）时拒绝执行。
+
+> 升级注意：与桌面壁纸补丁相同——ZCode 升级覆盖 `app.asar` 后失效，先还原再等工具包适配后重打。
+
+---
+
 ## 字体说明
 
 `fonts/` 目录附带全部字体资源压缩包，需解压后安装：
@@ -359,13 +402,18 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-timezone.bat` / `restore-zcode-timezone.ps1` | 时区设置还原入口 |
 | `patch-zcode-usage.bat` / `patch-zcode-usage.ps1` | 用量历史保留补丁入口（停用 30 天滚动清理，`zcode.cjs` 等长替换） |
 | `restore-zcode-usage.bat` / `restore-zcode-usage.ps1` | 用量清理还原入口（优先原位反替换，兼容同文件其他补丁） |
+| `patch-zcode-wallpaper-gear.bat` / `patch-zcode-wallpaper-gear.ps1` | 挡位壁纸补丁入口（思考级别联动换图，含纱浓度调节） |
+| `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
+| `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … 最后一张兼兜底），见第七章映射表 |
 | `zcode-timezone-state.json` | 时区补丁的还原点（记录打补丁前的用户级 TZ 值；还原时自动清理） |
 | `zcode-toolbox.bat` / `zcode-toolbox.ps1` | 统一工具箱入口（任务清单多选，一次退出检查，最后统一重启） |
-| `wallpapers/` | 内置壁纸（8 张），可自行增删图片文件，菜单自动列出 |
+| `wallpapers/` | 桌面壁纸补丁的内置壁纸（8 张），可自行增删图片文件，菜单自动列出 |
 | `fonts/*.zip` | 字体资源压缩包，需解压安装，见「字体说明」 |
 | `app.asar.font-backup.sha256` / `zcode.cjs.title-backup.sha256` / `app.asar.wallpaper-backup.sha256` / `app.asar.updates-backup.sha256` | 备份 SHA-256 指纹 |
+| `app.asar.gwp-backup.sha256` | 挡位壁纸补丁备份指纹（备份本体与其它 asar 备份一样不入库） |
 | `zcode.cjs.usage-backup.sha256` | 用量补丁备份指纹（与备份同放目标文件目录） |
 | `app.asar.font-backup` / `zcode.cjs.title-backup` / `app.asar.wallpaper-backup` / `app.asar.updates-backup` | 首次打补丁时在本机生成的原始文件备份（体积大，已被 `.gitignore` 排除，不入库） |
+| `app.asar.gwp-backup` | 挡位壁纸补丁的原始文件备份（同上不入库，`.gitignore` 已排除） |
 | `zcode.cjs.usage-backup` | 用量补丁的原始文件备份（生成在 ZCode 安装目录 `resources\glm\` 下，跟随目标文件，不入库） |
 
 工具包可整体拷贝到任意目录使用，备份与指纹始终存放在工具包所在目录内。
@@ -378,9 +426,15 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 - **ZCode 升级后标题又不生成了**：升级覆盖了 `resources\glm\zcode.cjs`，见「升级注意」。
 - **ZCode 升级后壁纸消失了**：升级覆盖了 `app.asar` 且渲染层 CSS 文件名随版本变化，先运行 `restore-zcode-wallpaper.bat`（识别不了会拒绝执行），再等工具包适配新版后重打。
 - **壁纸文字看不清**：重新运行 `patch-zcode-wallpaper.bat`，把纱浓度调高（如 70–85）。
+- **挡位壁纸不随档位切换（所有档位都显示同一张图）**：确认用的是修正版脚本（2026-10-14 之前的版本选择器多了个空格，所有档位落到兜底图），重跑 `patch-zcode-wallpaper-gear.bat` 即可。
+- **挡位壁纸某档不生效**：核对 `images/` 文件名与第七章映射表（四张图必须叫 M1–M4），改完文件后重跑 `patch-zcode-wallpaper-gear.bat`。
 - **又出现绿色「更新」徽标了**：ZCode 升级覆盖了 `app.asar`，更新检测随新版恢复——运行 `zcode-toolbox.bat` 勾选需要的补丁（含 `[4]` 禁用更新）一次重打即可；ZCode 升级后所有 asar 补丁都需重打。
 - **还原时提示 backup not found**：本机从未打过对应补丁（备份由补丁脚本生成），或备份文件已被删除。备份丢失时无法用本工具还原，需重新安装 ZCode。
 - **定时任务还是按 UTC 触发**：时区补丁只对**补丁之后启动**的进程生效——先运行 `patch-zcode-timezone.bat`，再完全退出并重启 ZCode；仍不生效时在 PowerShell 里执行 `[Environment]::GetEnvironmentVariable('TZ','User')`，应输出 `Asia/Shanghai`。Git Bash 的 `date` 显示 GMT 属正常现象（MSYS 不识别 IANA 时区名），不代表补丁失效。
 - **累计 Token 数还是越来越少**：用量保留补丁只对**补丁之后写入**的数据生效——先退出 ZCode，运行 `patch-zcode-usage.bat`（工具箱 `[11]`）再启动；打补丁前已被清理的历史无法找回。验证方法：PowerShell 在 `resources\glm\zcode.cjs` 中搜索 `hos=9e15`，能搜到即补丁在位；搜到 `mos*24*60*60*1e3` 则是未打或已还原状态。
 - **提示 title fix already present / 上游已修复**：ZCode 3.14.3 起官方已修复标题自动生成（与本项目补丁字节同形），标题补丁自动跳过、还原脚本拒绝反修复，均属正常。
 - **还原用量补丁时提示 unknown state**：目标文件的补丁片段与脚本签名不匹配（通常是 ZCode 版本更新），脚本拒绝盲写。确认后可删除目标目录中的 `zcode.cjs.usage-backup` 让脚本重建基线，或等工具包适配新版本。
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=caixibei/zcode-modkit&type=Date)](https://star-history.com/#caixibei/zcode-modkit&Date)

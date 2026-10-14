@@ -1,14 +1,14 @@
 # ZCode Patch Toolbox (v1, portable) - unified menu for all patch/restore tasks
-# - Lists the 5 patches (apply) and 5 restores as a picklist; the user selects
+# - Lists the 7 patches (apply) and 7 restores as a picklist; the user selects
 #   ONE OR MANY tasks (e.g. "1 3" or "1,3"), they run in ascending order.
 # - ZCode running-check happens ONCE up front; ZCode (if found) is restarted
 #   ONCE at the end when any selected task actually patched something.
 # - Each task shells out to the existing single-purpose script with -NoRestart,
 #   so behavior, backups and state detection stay identical to the standalone
 #   .bat entries (those keep working unchanged).
-# - Interactive inputs (wallpaper photo / veil selection, manual install dir)
-#   still come from the underlying scripts; run tasks one at a time if you
-#   prefer. Exits automatically when done; pauses only on errors.
+# - Interactive inputs (wallpaper photo / veil selection, gear image veil,
+#   manual install dir) still come from the underlying scripts; run tasks one
+#   at a time if you prefer. Exits automatically when done; pauses only on errors.
 # Save as UTF-8 WITHOUT BOM
 param([string]$PsExe = 'powershell')   # host used to run the sub scripts
 $ErrorActionPreference = 'Continue'
@@ -21,12 +21,14 @@ $tasks = @(
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '9'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
     [pscustomobject]@{ Id = '11'; Kind = 'patch';  Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
+    [pscustomobject]@{ Id = '13'; Kind = 'patch';  Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
     [pscustomobject]@{ Id = '5'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },
     [pscustomobject]@{ Id = '6'; Kind = 'restore'; Label = 'restore title fix';        Script = 'restore-zcode-title.ps1' },
     [pscustomobject]@{ Id = '7'; Kind = 'restore'; Label = 'restore wallpaper';        Script = 'restore-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '8'; Kind = 'restore'; Label = 're-enable update checks';  Script = 'restore-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },
-    [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 'restore 30d usage prune';  Script = 'restore-zcode-usage.ps1' }
+    [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 'restore 30d usage prune';  Script = 'restore-zcode-usage.ps1' },
+    [pscustomobject]@{ Id = '14'; Kind = 'restore'; Label = 'restore gear wallpaper';   Script = 'restore-zcode-wallpaper-gear.ps1' }
 )
 
 function Show-Menu {
@@ -80,8 +82,9 @@ foreach ($id in $ids) {
     }
     $chosen += $hit
 }
-# de-duplicate while preserving ascending order
-$chosen = $chosen | Sort-Object Id -Unique
+# de-duplicate while preserving ascending order (numeric: 2-digit ids like
+# 10-14 must sort after single-digit ones, not between 1 and 2)
+$chosen = $chosen | Sort-Object { [int]$_.Id } -Unique
 
 Write-Host ''
 Write-Host 'will run:' -ForegroundColor Cyan
