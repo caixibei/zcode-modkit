@@ -8,6 +8,10 @@ param(
     [string]$TargetCjs    # advanced/testing: operate on this zcode.cjs instead of the auto-located one (skips the running check)
 )
 $ErrorActionPreference = 'Stop'
+# Clear NODE_OPTIONS from this process so the ZCode.exe we (re)start never
+# inherits unsupported flags (packaged Electron apps print a startup ERROR for
+# e.g. --max-old-space-size); the machine/user registry value is NOT touched.
+try { Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue } catch {}
 $latin1 = [System.Text.Encoding]::GetEncoding(28591)
 
 # backup lives NEXT TO THE TARGET FILE (mirrors the patch script); $backupPath
