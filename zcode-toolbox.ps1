@@ -12,6 +12,10 @@
 # Save as UTF-8 WITHOUT BOM
 param([string]$PsExe = 'powershell')   # host used to run the sub scripts
 $ErrorActionPreference = 'Continue'
+# Clear NODE_OPTIONS from this process so the ZCode.exe we (re)start never
+# inherits unsupported flags (packaged Electron apps print a startup ERROR for
+# e.g. --max-old-space-size); the machine/user registry value is NOT touched.
+try { Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue } catch {}
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $tasks = @(
@@ -19,16 +23,16 @@ $tasks = @(
     [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title fix';        Script = 'patch-zcode-title.ps1' },
     [pscustomobject]@{ Id = '3'; Kind = 'patch';   Label = 'wallpaper patch';          Script = 'patch-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
-    [pscustomobject]@{ Id = '9'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
-    [pscustomobject]@{ Id = '11'; Kind = 'patch';  Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
-    [pscustomobject]@{ Id = '13'; Kind = 'patch';  Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
-    [pscustomobject]@{ Id = '5'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '6'; Kind = 'restore'; Label = 'restore title fix';        Script = 'restore-zcode-title.ps1' },
-    [pscustomobject]@{ Id = '7'; Kind = 'restore'; Label = 'restore wallpaper';        Script = 'restore-zcode-wallpaper.ps1' },
-    [pscustomobject]@{ Id = '8'; Kind = 'restore'; Label = 're-enable update checks';  Script = 'restore-zcode-updates.ps1' },
-    [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },
-    [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 'restore 30d usage prune';  Script = 'restore-zcode-usage.ps1' },
-    [pscustomobject]@{ Id = '14'; Kind = 'restore'; Label = 'restore gear wallpaper';   Script = 'restore-zcode-wallpaper-gear.ps1' }
+    [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
+    [pscustomobject]@{ Id = '6'; Kind = 'patch';   Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
+    [pscustomobject]@{ Id = '7'; Kind = 'patch';   Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
+    [pscustomobject]@{ Id = '8'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },
+    [pscustomobject]@{ Id = '9'; Kind = 'restore'; Label = 'restore title fix';        Script = 'restore-zcode-title.ps1' },
+    [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore wallpaper';       Script = 'restore-zcode-wallpaper.ps1' },
+    [pscustomobject]@{ Id = '11'; Kind = 'restore'; Label = 're-enable update checks'; Script = 'restore-zcode-updates.ps1' },
+    [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },
+    [pscustomobject]@{ Id = '13'; Kind = 'restore'; Label = 'restore 30d usage prune'; Script = 'restore-zcode-usage.ps1' },
+    [pscustomobject]@{ Id = '14'; Kind = 'restore'; Label = 'restore gear wallpaper';  Script = 'restore-zcode-wallpaper-gear.ps1' }
 )
 
 function Show-Menu {
