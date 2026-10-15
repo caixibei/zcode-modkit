@@ -1,19 +1,22 @@
-﻿# ZCode gear-wallpaper patch (v1, portable) - save as UTF-8 WITH BOM
+﻿# ZCode gear-wallpaper patch (v2, portable) - save as UTF-8 WITH BOM
 # - Dynamically switches the desktop background photo by the CURRENT THOUGHT
-#   LEVEL shown in the composer toolbar (the "低/高/最高" dropdown):
-#     4 images (M1..M4): M1 = off/nothink, M2 = minimal/low,
-#                        M3 = medium/high, M4 = xhigh/max/ultra (fallback)
-#     3 images (M1..M3): M1 = off/nothink/minimal/low, M2 = medium/high,
-#                        M3 = xhigh/max/ultra (fallback)
+#   LEVEL shown in the composer toolbar ("低/中/高/极高/最高" and similar):
+#     4 images (M1..M4): M1 = minimal/low, M2 = medium/on,
+#                        M3 = high/xhigh, M4 = max/ultra
+#     3 images (M1..M3): M1 = minimal/low, M2 = medium/high/on,
+#                        M3 = xhigh/max/ultra
+#   OFF ("关闭") gets NO image on purpose: no selector is generated for it, so
+#   the window falls back to the stock background (or the static wallpaper
+#   patch's photo when that patch is installed).
 #   ZCode's renderer exposes the live level on a hidden node
 #   ([data-thought="..."]); the appended CSS uses :has() so the switch is
 #   instant, purely declarative, and survives every app update pattern that
 #   keeps that attribute. No JavaScript is injected.
 # - Images come from .\images\ and are named M<n> (n = 1.., consecutive):
 #     M1.jpg / M1.jpeg / M1.png / M1.bmp -> gear 1 (lowest)
-#     M2.* -> gear 2 ... the LAST gear is ALSO the fallback background, so
-#     the desktop is never bare. To change a picture, just replace the file
-#     (any of the supported extensions) and re-run this script.
+#     M2.* -> gear 2 ... every non-off level is covered by exactly one gear.
+#     To change a picture, just replace the file (any of the supported
+#     extensions) and re-run this script.
 # - app.asar is FULLY REBUILT (same technique as patch-zcode-wallpaper.ps1):
 #   every original file stays byte-identical and in order; only the target CSS
 #   gains an appended block and the header offsets are recomputed. Integrity
@@ -224,36 +227,39 @@ function ConvertTo-GearDataUri([string]$photoPath) {
 }
 
 # ---- gear wallpaper CSS block ------------------------------------------------------
-# Gear -> data-thought value groups (low to high). With 4 images M4 covers the
-# top group only; with 3 images the last one also covers minimal/low.
+# Gear -> data-thought value groups (low to high). data-thought carries the RAW
+# option value from the model config; the renderer's label map (kU) accepts:
+# off-family (disabled/false/no/none/nothink/no-think/no_think/off), the generic
+# on-family (enable/enabled/on/true), and effort levels
+# minimal/low/medium/high/xhigh/max/ultra (extra-high/extra_high normalize to
+# xhigh only for LABELS, so the CSS matches the raw ids).
+# OFF and off-family values are deliberately NOT mapped: when thinking is off
+# no :has() rule matches and the window keeps its stock (or static-wallpaper)
+# background. 'on'-family sits between off and the concrete effort levels, so
+# it shows the medium gear.
 $gearLevels4 = @(
-    @('off', 'nothink'),
     @('minimal', 'low'),
-    @('medium', 'high'),
-    @('xhigh', 'max', 'ultra')
+    @('medium', 'on', 'enable', 'enabled', 'true'),
+    @('high', 'xhigh'),
+    @('max', 'ultra')
 )
 $gearLevels3 = @(
-    @('off', 'nothink', 'minimal', 'low'),
-    @('medium', 'high'),
+    @('minimal', 'low'),
+    @('medium', 'high', 'on', 'enable', 'enabled', 'true'),
     @('xhigh', 'max', 'ultra')
 )
 
 function ConvertTo-GearWallpaperCss([string[]]$dataUris, [int]$veilPct, [object[]]$levelGroups) {
-    # $dataUris per gear (low -> high); the LAST one is the base/fallback image
-    $last = $dataUris[$dataUris.Count - 1]
+    # $dataUris per gear (low -> high). There is NO base/fallback rule: the
+    # stock .bg-background-win-alt styling (or the static wallpaper patch)
+    # shows through whenever the current level has no gear image (off, or an
+    # unknown future level id).
     $sb = New-Object System.Text.StringBuilder
     [void]$sb.AppendLine($markerBegin)
     [void]$sb.AppendLine('/* ZCode gear wallpaper patch: background follows the composer thought level.')
     [void]$sb.AppendLine('   Re-run patch-zcode-wallpaper-gear.bat to switch images;')
     [void]$sb.AppendLine('   restore-zcode-wallpaper-gear.bat reverts. */')
     [void]$sb.AppendLine(":root{--gwp-veil:$veilPct%}")
-    [void]$sb.AppendLine('[data-desktop-window-frame].bg-background-win-alt{')
-    [void]$sb.AppendLine("background-image:url(`"$last`");")
-    [void]$sb.AppendLine('background-size:cover;')
-    [void]$sb.AppendLine('background-position:center;')
-    [void]$sb.AppendLine('background-repeat:no-repeat;')
-    [void]$sb.AppendLine('background-color:transparent;')
-    [void]$sb.AppendLine('}')
     for ($i = 0; $i -lt $levelGroups.Count; $i++) {
         $levels = @($levelGroups[$i])
         # compound selector (no space): bg-background-win-alt sits on the SAME
@@ -261,6 +267,10 @@ function ConvertTo-GearWallpaperCss([string[]]$dataUris, [int]$veilPct, [object[
         $selectors = foreach ($lv in $levels) { "[data-desktop-window-frame]:has([data-thought=`"$lv`"]).bg-background-win-alt" }
         [void]$sb.AppendLine(($selectors -join ",`n") + '{')
         [void]$sb.AppendLine("background-image:url(`"$($dataUris[$i])`");")
+        [void]$sb.AppendLine('background-size:cover;')
+        [void]$sb.AppendLine('background-position:center;')
+        [void]$sb.AppendLine('background-repeat:no-repeat;')
+        [void]$sb.AppendLine('background-color:transparent;')
         [void]$sb.AppendLine('}')
     }
     [void]$sb.AppendLine('[data-desktop-window-frame] .bg-background{')
@@ -381,7 +391,7 @@ while ($true) {
 }
 if ($gearFiles.Count -lt 3) {
     Write-Host "[X] found $($gearFiles.Count) gear image(s) in images\, need at least 3 (M1, M2, M3)." -ForegroundColor Red
-    Write-Host '    Naming: M1 = lowest gear ... M<n> = higher gear; the LAST one is also the fallback.'
+    Write-Host '    Naming: M1 = lowest gear ... M<n> = higher gear (off needs no image).'
     Read-Host 'Press Enter to exit'
     exit 1
 }
@@ -392,7 +402,12 @@ if ($gearFiles.Count -gt 4) {
 }
 $levelGroups = if ($gearFiles.Count -eq 3) { $gearLevels3 } else { $gearLevels4 }
 
-$gearNames = @('off/nothink', 'minimal/low', 'medium/high', 'xhigh/max/ultra')
+# gear display names derive from the ACTIVE level groups, capped to the first
+# two ids so the menu stays readable (aliases like on/enabled are implied)
+$gearNames = @($levelGroups | ForEach-Object {
+    $g = @($_)
+    if ($g.Count -gt 2) { ($g[0..1] -join '/') } else { ($g -join '/') }
+})
 Write-Host ''
 Write-Host '===== gear images ====='
 for ($i = 0; $i -lt $gearFiles.Count; $i++) {
