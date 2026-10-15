@@ -318,18 +318,19 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 壁纸跟随输入框工具栏的「思考级别」下拉（低 / 高 / 最高）自动切换：每一档配一张图，切换档位的瞬间背景即时更换。纯 CSS 实现——ZCode 渲染层有一个隐藏状态节点实时携带当前档位属性（`data-thought="..."`），补丁向渲染层 CSS 追加一段基于 `:has()` 选择器的规则块，React 更新属性时浏览器自动重新匹配，**不注入任何 JavaScript**。
 
-**档位与图片映射**：图片放 `images/` 目录，命名 `M1`–`M4`（jpg / jpeg / png / bmp 均可），脚本按现有文件自动选择映射方案：
+**档位与图片映射**：图片放 `images/` 目录，命名 `M1`–`M4`（jpg / jpeg / png / bmp 均可），脚本按现有文件自动选择映射方案。**「关闭思考」不配图**——关闭时背景回归默认（打过桌面壁纸补丁则显示其壁纸）；其余所有思考档位都有对应图片：
 
 | 文件 | 4 张图（M1–M4） | 3 张图（M1–M3） |
 | --- | --- | --- |
-| `M1.*` | 挡 1：关闭思考（off、nothink） | 挡 1：关闭 + 低（off、nothink、minimal、low） |
-| `M2.*` | 挡 2：低（minimal、low） | 挡 2：高（medium、high） |
-| `M3.*` | 挡 3：高（medium、high） | 挡 3：最高（xhigh、max、ultra），兼兜底 |
-| `M4.*` | 挡 4：最高（xhigh、max、ultra），兼兜底 | — |
+| `M1.*` | 挡 1：极低 / 低（minimal、low） | 挡 1：极低 / 低（minimal、low） |
+| `M2.*` | 挡 2：中（medium，及通用开启 on 等） | 挡 2：中 / 高（medium、high，及通用开启） |
+| `M3.*` | 挡 3：高 / 极高（high、xhigh） | 挡 3：最高（xhigh、max、ultra） |
+| `M4.*` | 挡 4：最高 / 极致（max、ultra） | — |
 
-- **最后一张图永远是兜底背景**：未开思考或识别不到档位时显示它，桌面不会空白；
-- 张数 3–4 张任意；超过 4 张只取前 4 张（ZCode 一共 4 组档位值）；
-- 换图只需替换同名文件后重跑补丁。
+- **每一档都换图、无兜底图**：脚本只生成各挡位的 `:has()` 覆盖规则，不再设基础背景图——任何未映射的档位值（关闭、未知新值）都自然回落到默认背景或静态壁纸，四张图各自只服务自己的挡位；
+- 「通用开启」（on / enable / enabled / true）是部分模型的"开启思考但不分级"取值，归入挡 2；
+- 张数 3–4 张任意；超过 4 张只取前 4 张（ZCode 档位值共 off / on / minimal / low / medium / high / xhigh / max / ultra 九种归一值）；
+- 换图只需替换同名文件后重跑补丁（脚本幂等，可反复运行重设）。
 
 **打补丁 / 换图**
 
@@ -404,7 +405,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-usage.bat` / `restore-zcode-usage.ps1` | 用量清理还原入口（优先原位反替换，兼容同文件其他补丁） |
 | `patch-zcode-wallpaper-gear.bat` / `patch-zcode-wallpaper-gear.ps1` | 挡位壁纸补丁入口（思考级别联动换图，含纱浓度调节） |
 | `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
-| `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … 最后一张兼兜底），见第七章映射表 |
+| `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … M4 最高挡；「关闭思考」不配图），见第七章映射表 |
 | `zcode-timezone-state.json` | 时区补丁的还原点（记录打补丁前的用户级 TZ 值；还原时自动清理） |
 | `zcode-toolbox.bat` / `zcode-toolbox.ps1` | 统一工具箱入口（任务清单多选，一次退出检查，最后统一重启） |
 | `wallpapers/` | 桌面壁纸补丁的内置壁纸（8 张），可自行增删图片文件，菜单自动列出 |
@@ -428,6 +429,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 - **壁纸文字看不清**：重新运行 `patch-zcode-wallpaper.bat`，把纱浓度调高（如 70–85）。
 - **挡位壁纸不随档位切换（所有档位都显示同一张图）**：确认用的是修正版脚本（2026-10-14 之前的版本选择器多了个空格，所有档位落到兜底图），重跑 `patch-zcode-wallpaper-gear.bat` 即可。
 - **挡位壁纸某档不生效**：核对 `images/` 文件名与第七章映射表（四张图必须叫 M1–M4），改完文件后重跑 `patch-zcode-wallpaper-gear.bat`。
+- **「关闭思考」也有壁纸 / 想让关闭时不显示图**：v2 映射（2026-10-15 起）已把关闭档排除——关闭时回归默认背景；若仍显示图，说明 asar 里是旧版映射块，重跑 `patch-zcode-wallpaper-gear.bat` 覆盖即可。
 - **又出现绿色「更新」徽标了**：ZCode 升级覆盖了 `app.asar`，更新检测随新版恢复——运行 `zcode-toolbox.bat` 勾选需要的补丁（含 `[4]` 禁用更新）一次重打即可；ZCode 升级后所有 asar 补丁都需重打。
 - **还原时提示 backup not found**：本机从未打过对应补丁（备份由补丁脚本生成），或备份文件已被删除。备份丢失时无法用本工具还原，需重新安装 ZCode。
 - **定时任务还是按 UTC 触发**：时区补丁只对**补丁之后启动**的进程生效——先运行 `patch-zcode-timezone.bat`，再完全退出并重启 ZCode；仍不生效时在 PowerShell 里执行 `[Environment]::GetEnvironmentVariable('TZ','User')`，应输出 `Asia/Shanghai`。Git Bash 的 `date` 显示 GMT 属正常现象（MSYS 不识别 IANA 时区名），不代表补丁失效。
