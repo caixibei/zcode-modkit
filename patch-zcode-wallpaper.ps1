@@ -28,6 +28,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
+# Clear NODE_OPTIONS from this process so the ZCode.exe we (re)start never
+# inherits unsupported flags (packaged Electron apps print a startup ERROR for
+# e.g. --max-old-space-size); the machine/user registry value is NOT touched.
+try { Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue } catch {}
 Add-Type -AssemblyName System.Drawing
 
 $backupPath = Join-Path $PSScriptRoot 'app.asar.wallpaper-backup'

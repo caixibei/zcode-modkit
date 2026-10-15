@@ -21,6 +21,10 @@
 # Revert with restore-zcode-timezone.bat
 param([switch]$NoRestart)   # toolbox mode: the toolbox relaunches ZCode itself
 $ErrorActionPreference = 'Stop'
+# Clear NODE_OPTIONS from this process so the ZCode.exe we (re)start never
+# inherits unsupported flags (packaged Electron apps print a startup ERROR for
+# e.g. --max-old-space-size); the machine/user registry value is NOT touched.
+try { Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue } catch {}
 $wantTz = 'Asia/Shanghai'
 $statePath = Join-Path $PSScriptRoot 'zcode-timezone-state.json'
 
