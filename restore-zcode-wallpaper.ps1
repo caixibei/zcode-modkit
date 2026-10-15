@@ -100,6 +100,11 @@ function Remove-Integrity($node) {
 }
 function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath) {
     Remove-Integrity $asar.header
+    # Walk-Assign2 below rewrites offsets in place, so it must walk a CLONE of
+    # the header: a second Write-Asar call on the same $asar would otherwise
+    # treat already-shifted offsets as source positions and corrupt every
+    # payload file after the replaced one.
+    $header = ($asar.header | ConvertTo-Json -Depth 100 -Compress) | ConvertFrom-Json
     $script:wp_rel = $relPath
     $script:wp_new = $newBytes
     $script:wp_cursor = 0L
@@ -127,9 +132,9 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
         $node.offset = [string]$script:wp_cursor
         $script:wp_cursor += $newSize
     }
-    Walk-Assign2 $asar.header ''
+    Walk-Assign2 $header ''
 
-    $json      = $asar.header | ConvertTo-Json -Depth 100 -Compress
+    $json      = $header | ConvertTo-Json -Depth 100 -Compress
     $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
     $padLen        = (4 - ($jsonBytes.Length % 4)) % 4
     $headerBufLen  = 8 + $jsonBytes.Length + $padLen
@@ -166,7 +171,7 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
             $bw.Write($chunk)
         }
     }
-    Walk-Write $asar.header ''
+    Walk-Write $header ''
     $bw.Flush()
     [System.IO.File]::WriteAllBytes($outPath, $ms.ToArray())
     $bw.Dispose(); $ms.Dispose()
@@ -243,6 +248,35 @@ if ($cBegin -eq 1 -and $cEnd -eq 1) {
     $cleanBytes = [System.Text.Encoding]::UTF8.GetBytes($cleanText)
     $tmpPath = "$asarPath.tmp"
     Write-Asar $asar $cssRelPath $cleanBytes $tmpPath
+    # payload spot-check before the final swap: re-read the SOURCE asar from
+    # disk and verify untouched sentinel files byte-for-byte. Catches any
+    # rebuild bug (e.g. a shifted-offset double rebuild) that the marker
+    # verification below misses; package.json is the Electron entry point and
+    # the last file in the payload.
+    $srcCheck = [System.IO.File]::ReadAllBytes($asarPath)
+    $hdrTotal2 = [BitConverter]::ToUInt32($srcCheck, 4)
+    $jsonLen2 = [BitConverter]::ToUInt32($srcCheck, 12)
+    $srcHdr = ([System.Text.Encoding]::UTF8.GetString($srcCheck, 16, [int]$jsonLen2)) | ConvertFrom-Json
+    $srcBase = 8 + [int]$hdrTotal2
+    $tmpAsar = Read-Asar $tmpPath
+    foreach ($sentinel in @('package.json', 'out/main/index.js')) {
+        $segs = $sentinel -split '/'
+        $n = $srcHdr
+        foreach ($s in $segs) { $n = $n.files.$s }
+        $sLen = [int]$n.size
+        $srcBytes = New-Object byte[] $sLen
+        [Array]::Copy($srcCheck, $srcBase + [long]$n.offset, $srcBytes, 0, $sLen)
+        $tSegs = $sentinel -split '/'
+        $t = $tmpAsar.header
+        foreach ($s in $tSegs) { $t = $t.files.$s }
+        $tLen = [int]$t.size
+        $tmpBytes = New-Object byte[] $tLen
+        [Array]::Copy($tmpAsar.bytes, $tmpAsar.contentBase + [long]$t.offset, $tmpBytes, 0, $tLen)
+        if ($sLen -ne $tLen -or -not [System.Linq.Enumerable]::SequenceEqual([byte[]]$srcBytes, [byte[]]$tmpBytes)) {
+            Remove-Item $tmpPath -ErrorAction SilentlyContinue
+            throw "rebuilt asar failed self-check (payload sentinel $sentinel differs from source); original untouched."
+        }
+    }
     Move-Item -Force $tmpPath $asarPath
     $restored = $true
 }
