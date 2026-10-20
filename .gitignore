@@ -1,5 +1,7 @@
 app.asar.font-backup
 zcode.cjs.title-backup
+zcode.cjs.title-refresh-backup
+zcode.cjs.title-refresh-backup.sha256
 app.asar.wallpaper-backup
 app.asar.updates-backup
 app.asar.gwp-backup
