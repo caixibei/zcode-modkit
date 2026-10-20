@@ -145,6 +145,22 @@ $bytes   = [System.IO.File]::ReadAllBytes($cjsPath)
 $text    = $latin1.GetString($bytes)
 $cjsHash = Hash-Bytes $bytes
 
+# Compatibility guard: the v4 last-turn patch already contains this base fix.
+# Do not fall through to the version matcher (it would report an unknown state).
+if ((Count-Str $text '/*ZCODE-LASTTURN-DEFER*/') -eq 1) {
+    Write-Host '[1/4] last-turn title patch detected; base title fix is already present.'
+    Write-Host '      Use restore-zcode-title-lastturn.bat to revert the last-turn behavior.'
+    if ($NoRestart) {
+        Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
+    } elseif ($zcodeExe) {
+        Start-Process $zcodeExe
+        Write-Host '[4/4] ZCode restarted.'
+    } else {
+        Write-Host '[4/4] done. Start ZCode manually.'
+    }
+    exit 0
+}
+
 $cOldLang = Count-Str $text $oldLang
 $cNewLang = Count-Str $text $newLang
 $isLangClean   = ($cOldLang -eq 1)
