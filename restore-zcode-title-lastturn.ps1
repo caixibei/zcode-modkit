@@ -1,6 +1,7 @@
-# ZCode session title v5 restore (overall session context + work-type prefix)
-# - Reverses the v5 additions in the CURRENT zcode.cjs in place, then the v4
-#   last-turn additions, then the base title fix. Unrelated patches in other
+# ZCode session title v6 restore (overall context + six task types + integrated refresh)
+# - Reverses the v6 additions in the CURRENT zcode.cjs in place, then the v5
+#   additions, the v4 last-turn additions, and finally the base title fix.
+#   Unrelated patches in other
 #   byte regions (e.g. usage retention) are preserved.
 # - If the in-place reverse is not applicable, falls back to the clean whole-file
 #   backup (this erases patches applied after the backup; the script warns).
@@ -98,6 +99,36 @@ $newYba = 'function yba(e,p){let t=p?String(e||"").trim().replace(/\s+/g," ").sl
 $oldYbaCall = 'f=yba(e),g=this.createEvent'
 $newYbaCall = 'f=yba(e,t.prompt),g=this.createEvent'
 
+# ---- v6 reverse signatures: restore v6 functions to their v5 forms ----
+$v6Marker = '/*ZCODE-TITLE-V6*/'
+$v5Yba = @'
+function yba(e,p){let t=p?String(e||"").trim().replace(/\s+/g," ").slice(0,4000):Zye(e);return[{role:"system",content:p||gba},{role:"user",content:t}]}
+'@
+$v5Yba = $v5Yba.TrimEnd("`r","`n")
+$v5Vba = @'
+function vba(e){let t=e.replace(/<think>[\s\S]*?<\/think>/gi,"").trim(),o=bba(t)??kba(t);if(!o)return null;let s=o.replace(/^#+\s*/,"").replace(/^(\u4E3B\u4EBA|\u52A9\u624B|assistant|user)[\s,\uFF0C:\uFF1A\u3001]+/i,"").replace(/^\(([^()]{1,8})\)\s*/,"\uFF08$1\uFF09 ").replace(/^[\s"'`\u201C\u201D\u2018\u2019]+|[\s"'`\u201C\u201D\u2018\u2019]+$/g,"").replace(/[.\u3002!\uFF01?\uFF1F:\uFF1A,\uFF0C;\uFF1B]+$/g,"").replace(/\s+/g," ").trim();return/[A-Za-z0-9\u3400-\u9fff]/.test(s)?s.length>yxo?`${s.slice(0,yxo-3).trim()}...`:s:null}
+'@
+$v5Vba = $v5Vba.TrimEnd("`r","`n")
+$v5Sba = @'
+function Sba(e){try{let t=JSON.parse(e);if(!t||typeof t!="object"||!("title"in t))return null;let n=t.title;return typeof n=="string"?n:null}catch{return null}}
+'@
+$v5Sba = $v5Sba.TrimEnd("`r","`n")
+$v5Kba = @'
+function kba(e){return e.split(/\r?\n/).map(t=>t.trim()).find(t=>t.length>0)??null}
+'@
+$v5Kba = $v5Kba.TrimEnd("`r","`n")
+
+# ---- integrated refresh variant reverse (former tool 16) ----
+$refreshPrefix = '/*ZCODE-TITLE-REFRESH:'
+$refreshSameMarker = '/*ZCODE-TITLE-REFRESH-SAME*/'
+$refreshPbaOld = 'e.sessionTitleGenerationAttempted||'
+$refreshPbaNew = '/*' + ('x' * 31) + '*/'
+$refreshWwnOld = 'return!1;this.sessionTitleGenerationAttempted=!0;let n=this.agentTelemetry'
+$refreshObaOld = 'let n=t.title,o=await this.sessionStore?.updateSession({expectedTitleSources:Eba,id:this.sessionId,title:e.title,'
+$refreshObaNew = 'let n=t.title;' + $refreshSameMarker + 'if(n===e.title){this.logger?.debug("Session title generation skipped",{...Cr(e.traceContext),event:"session_title_generation.skipped",module:"core.runtime",reason:"unchanged_title"});return}let o=await this.sessionStore?.updateSession({expectedTitleSources:Eba,id:this.sessionId,title:e.title,'
+
+
+
 function Count-Str([string]$hay, [string]$s) {
     return ([regex]::Matches($hay, [regex]::Escape($s))).Count
 }
@@ -175,11 +206,68 @@ if ($procs -and -not $TargetCjs) {
 
 $bytes = [System.IO.File]::ReadAllBytes($cjsPath)
 $text  = $latin1.GetString($bytes)
+$hasV6 = ((Count-Str $text $v6Marker) -eq 1)
 $hasV5 = ((Count-Str $text $overallMarker) -eq 1 -and (Count-Str $text $promptHead) -eq 1)
 $hasV4 = ((Count-Str $text $deferMarker) -eq 1 -and (Count-Str $text 'String(_||"").slice(0,600)') -eq 1 -and (Count-Str $text $retryNew) -eq 1)
-$hasRefresh = ((Count-Str $text '/*ZCODE-TITLE-REFRESH:') -gt 0)
-if (($hasV5 -or $hasV4) -and $hasRefresh) {
-    throw 'refresh variant is still present; run restore-zcode-title-refresh.bat first, then run this restore again.'
+$hasRefresh = ((Count-Str $text $refreshPrefix) -gt 0)
+
+# 0) reverse the integrated refresh variant first (it sits on top of v6/v5).
+if ($hasRefresh) {
+    $prefixCount = Count-Str $text $refreshPrefix
+    if ($prefixCount -ne 1) { throw "refresh marker occurs $prefixCount times (expected 1); refusing." }
+    $m = [regex]::Match($text, [regex]::Escape($refreshPrefix) + '(\d+)\*/')
+    if (-not $m.Success) { throw 'cannot parse RefreshTurns from refresh marker; refusing.' }
+    $n = [int]$m.Groups[1].Value
+    $refreshMarker = $refreshPrefix + $n + '*/'
+    $refreshWwnNew = 'return!1;' + $refreshMarker + 'if(this.sessionTitleGenerationAttempted&&(this.turnNumber-(this.sessionTitleGenerationTurn||0))<' + $n + ')return!1;this.sessionTitleGenerationTurn=this.turnNumber;this.sessionTitleGenerationAttempted=!0;let n=this.agentTelemetry'
+    if ((Count-Str $text $refreshWwnNew) -ne 1) { throw 'Wwn refresh block not found exactly once; refusing.' }
+    if ((Count-Str $text $refreshObaNew) -ne 1) { throw 'Oba same-title block not found exactly once; refusing.' }
+    if ((Count-Str $text ('if(' + $refreshPbaNew + 'e.config.titleGeneration')) -ne 1) { throw 'Pba refresh filler not found exactly once; refusing.' }
+    $text = $text.Replace($refreshWwnNew, $refreshWwnOld)
+    $text = $text.Replace($refreshObaNew, $refreshObaOld)
+    $text = $text.Replace('if(' + $refreshPbaNew + 'e.config.titleGeneration', 'if(' + $refreshPbaOld + 'e.config.titleGeneration')
+    if ((Count-Str $text $refreshPrefix) -ne 0) { throw 'refresh marker still present after reverse.' }
+    if ((Count-Str $text $refreshPbaOld) -ne 1) { throw 'Pba flag not restored.' }
+    if ((Count-Str $text $refreshWwnOld) -ne 1) { throw 'Wwn base not restored.' }
+    if ((Count-Str $text $refreshObaOld) -ne 1) { throw 'Oba base not restored.' }
+    if (-not (Test-JsSyntax $text)) { throw 'node --check failed after refresh reverse; refusing to write.' }
+    [System.IO.File]::WriteAllBytes($cjsPath, $latin1.GetBytes($text))
+    Write-Host '[0/4] refresh variant reversed; v6/v5 title patch remains.'
+}
+
+# 1) reverse v6 first, returning the file to its v5 state.
+if ($hasV6) {
+    Write-Host '[0/4] v6 title patch detected; reversing it to v5 state.'
+    $m = [regex]::Match($text, '(?s)/\*ZCODE-TITLE-V6\*/gba=`.*?`;r\(Zgt')
+    if (-not $m.Success) { throw 'v6 prompt anchor not found; refusing.' }
+    $text = $text.Replace($m.Value, 'gba=`' + $newPrompt + '`;r(Zgt')
+
+    $m = [regex]::Match($text, '(?s)function yba\(.*?function vba')
+    if (-not $m.Success) { throw 'v6 yba anchor not found; refusing.' }
+    $old = $m.Value.Substring(0, $m.Value.Length - 'function vba'.Length)
+    $text = $text.Replace($old, $v5Yba)
+
+    $m = [regex]::Match($text, '(?s)function vba\(.*?function bba')
+    if (-not $m.Success) { throw 'v6 vba anchor not found; refusing.' }
+    $old = $m.Value.Substring(0, $m.Value.Length - 'function bba'.Length)
+    $text = $text.Replace($old, $v5Vba)
+
+    $m = [regex]::Match($text, '(?s)function Sba\(.*?function wba')
+    if (-not $m.Success) { throw 'v6 Sba anchor not found; refusing.' }
+    $old = $m.Value.Substring(0, $m.Value.Length - 'function wba'.Length)
+    $text = $text.Replace($old, $v5Sba)
+
+    $m = [regex]::Match($text, '(?s)function kba\(.*?function xba')
+    if (-not $m.Success) { throw 'v6 kba anchor not found; refusing.' }
+    $old = $m.Value.Substring(0, $m.Value.Length - 'function xba'.Length)
+    $text = $text.Replace($old, $v5Kba)
+
+    $text = $text.Replace('String(sm.title??sm).slice(0,600)', 'String(sm).slice(0,600)')
+    if ((Count-Str $text $v6Marker) -ne 0) { throw 'v6 marker still present after reverse; refusing.' }
+    if (-not (Test-JsSyntax $text)) { throw 'node --check failed after v6 reverse; refusing to write.' }
+    [System.IO.File]::WriteAllBytes($cjsPath, $latin1.GetBytes($text))
+    $hasV5 = $true
+    Write-Host '[0/4] v6 additions reversed; v5 title patch remains.'
 }
 
 # 1) reverse v5 first, leaving the v4 last-turn code intact.
