@@ -1,6 +1,6 @@
 # ZCode session title refresh variant (topic-change / every N turns)
-# - Add-on on top of patch-zcode-title-lastturn.ps1 (v4). It does NOT work on a
-#   clean zcode.cjs; apply the v4 last-turn patch first.
+# - Add-on on top of patch-zcode-title-lastturn.ps1 (v5). It does NOT work on a
+#   clean zcode.cjs; apply the v5 last-turn patch first.
 # - Behavior:
 #     1) removes the one-shot sessionTitleGenerationAttempted gate from Pba;
 #     2) Wwn enforces a cooldown: after a title is generated, the next attempt
@@ -8,7 +8,10 @@
 #     3) Oba skips writing when the newly generated title equals the current one;
 #     4) custom titles are still never overwritten, and failed/cancelled calls
 #        still retry on the next successful turn.
-# - The title input remains v4's "latest user message + assistant final answer".
+# - The title input is v5's two-stage summary: short sessions use the first
+#   700 chars + up to 6 recent messages x 220 chars; long sessions first run
+#   one summary call over a 4000-char digest (summary max 100 chars), then
+#   build the title from that summary. Assistant replies are not used.
 # - RefreshTurns default 5; use 1 for every successful turn.
 # - Backup: zcode.cjs.title-refresh-backup (the v4 state of THIS machine).
 #   Revert with restore-zcode-title-refresh.bat.

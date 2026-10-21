@@ -20,7 +20,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $tasks = @(
     [pscustomobject]@{ Id = '1'; Kind = 'patch';   Label = 'UI font patch';            Script = 'patch-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title fix (last-turn context)'; Script = 'patch-zcode-title-lastturn.ps1' },
+    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title fix (overall context + work-type prefix)'; Script = 'patch-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '3'; Kind = 'patch';   Label = 'wallpaper patch';          Script = 'patch-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
