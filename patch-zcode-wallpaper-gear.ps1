@@ -13,8 +13,13 @@
 #   instant, purely declarative, and survives every app update pattern that
 #   keeps that attribute. No JavaScript is injected.
 # - Images come from .\images\ and are named M<n> (n = 1.., consecutive):
-#     M1.jpg / M1.jpeg / M1.png / M1.bmp -> gear 1 (lowest)
+#     M1.jpg / M1.jpeg / M1.png / M1.bmp / M1.gif -> gear 1 (lowest)
 #     M2.* -> gear 2 ... every non-off level is covered by exactly one gear.
+#   JPEG/PNG/BMP are scaled to a 1920 long edge and encoded as JPEG q82.
+#   GIF is embedded as-is to keep its animation: System.Drawing reads only the
+#   active frame and cannot write an animated GIF, so rescaling would drop
+#   every frame after the first. Each GIF is capped at 2 MiB; an oversize GIF
+#   falls back to its first frame encoded as JPEG.
 #     To change a picture, just replace the file (any of the supported
 #     extensions) and re-run this script.
 # - app.asar is FULLY REBUILT (same technique as patch-zcode-wallpaper.ps1):
@@ -44,6 +49,12 @@ $hashPath   = Join-Path $PSScriptRoot 'app.asar.gwp-backup.sha256'
 
 $markerBegin = '/* ZCODE-GWP-GEAR-WALLPAPER-BEGIN */'
 $markerEnd   = '/* ZCODE-GWP-GEAR-WALLPAPER-END */'
+
+# GIFs are embedded untouched (no rescale/re-encode), so each data URI lands in
+# the renderer CSS at roughly 4/3 of the file size. The cap keeps four gears
+# from adding tens of megabytes to a stylesheet the renderer parses at startup;
+# 2 MiB of GIF becomes about 2.7 MiB of base64.
+$script:maxGifBytes = 2MB
 
 # ---- the renderer CSS this kit patches (ZCode 3.14.1) ----
 $cssRelPath = 'out/renderer/assets/styles-C8Nayk5k.css'
@@ -203,8 +214,8 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
     $bw.Dispose(); $ms.Dispose()
 }
 
-# ---- image loading: scale long edge to 1920, JPEG q82, return base64 ----
-function ConvertTo-GearDataUri([string]$photoPath) {
+# ---- raster -> JPEG data URI: scale long edge to 1920, q82 ----
+function ConvertTo-JpegDataUri([string]$photoPath) {
     $fs = [System.IO.File]::OpenRead($photoPath)
     $img = $null
     try {
@@ -233,6 +244,24 @@ function ConvertTo-GearDataUri([string]$photoPath) {
         $fs.Dispose()
     }
     return 'data:image/jpeg;base64,' + [Convert]::ToBase64String($jpegBytes)
+}
+
+# ---- gear image -> data URI ----
+# A GIF within the cap keeps its animation by embedding the file bytes as-is:
+# the CSS background-image decoder plays animated GIFs, while re-encoding here
+# would flatten it to one frame. Anything else (and an oversize GIF) takes the
+# JPEG path above.
+function ConvertTo-GearDataUri([string]$photoPath) {
+    $file = Get-Item -LiteralPath $photoPath
+    if ($file.Extension -eq '.gif') {
+        if ($file.Length -le $script:maxGifBytes) {
+            $gifBytes = [System.IO.File]::ReadAllBytes($photoPath)
+            Write-Host ("  gif kept animated: {0} ({1:N1} MB)" -f $file.Name, ($file.Length / 1MB))
+            return 'data:image/gif;base64,' + [Convert]::ToBase64String($gifBytes)
+        }
+        Write-Host ("  [!] {0} is {1:N1} MB, over the {2:N0} MB gif cap; using its first frame as JPEG." -f $file.Name, ($file.Length / 1MB), ($script:maxGifBytes / 1MB)) -ForegroundColor Yellow
+    }
+    return ConvertTo-JpegDataUri $photoPath
 }
 
 # ---- gear wallpaper CSS block ------------------------------------------------------
@@ -392,7 +421,7 @@ $gearFiles = @()
 $n = 1
 while ($true) {
     $hit = Get-ChildItem -LiteralPath $imgDir -File -ErrorAction SilentlyContinue |
-        Where-Object { $_.BaseName -eq "M$n" -and $_.Extension -match '^\.(jpg|jpeg|png|bmp)$' } |
+        Where-Object { $_.BaseName -eq "M$n" -and $_.Extension -match '^\.(jpg|jpeg|png|bmp|gif)$' } |
         Sort-Object Name | Select-Object -First 1
     if (-not $hit) { break }
     $gearFiles += $hit.FullName
@@ -427,7 +456,7 @@ $veilInput = Read-Host 'veil opacity 0-85, higher = fainter photo [default 60]'
 $veilPct = 60
 if ($veilInput -match '^\d+$') { $veilPct = [Math]::Max(0, [Math]::Min(85, [int]$veilInput)) }
 
-Write-Host "[3/4] encoding images (long edge 1920, jpeg q82)..."
+Write-Host '[3/4] encoding images (gif kept animated; others long edge 1920, jpeg q82)...'
 $uris = foreach ($f in $gearFiles) { ConvertTo-GearDataUri $f }
 $blockBytes = ConvertTo-GearWallpaperCss @($uris) $veilPct $levelGroups
 
