@@ -1,4 +1,4 @@
-# ZCode session title patch v6 (overall context + six task types + integrated refresh)
+# ZCode session title patch v7 (overall context + six task types + integrated refresh)
 # - Targets resources\glm\zcode.cjs (agent CLI runtime), NOT app.asar
 # - Supersedes patch-zcode-title.ps1 and v4: applies the same base fix (missing
 #   config.titleGeneration guard + MUST language rule), the v4 last-turn trigger,
@@ -15,8 +15,11 @@
 #     3) generated titles are post-cleaned and validated: leading addresses are
 #        removed, half-width "(type)" becomes full-width, non-JSON answers and
 #        Markdown/long/multi-line fallbacks are rejected, and unknown types map
-#        to the six-type whitelist.
-# - v6 can upgrade a clean, v4, v5 or v4+refresh file in place. The v4/refresh
+#        to the six-type whitelist;
+#     4) v7: the task-type prefix is glued to the topic with no separator
+#        (full-width parens, then the text), and any whitespace the model emits
+#        after the closing parenthesis is stripped, so the gap never varies.
+# - v7 can upgrade a clean, v4, v5, v4+refresh or v6 file in place. The v4/refresh
 #   code regions are left intact; only the title prompt, the title-input call,
 #   and the title cleanup chain are replaced.
 # - zcode.cjs is a standalone file (NOT inside the asar archive), so its length
@@ -153,6 +156,19 @@ $v6Vba = @'
 function vba(e){let t=e.replace(/<think>[\s\S]*?<\/think>/gi,"").trim(),o=bba(t)??kba(t);if(!o)return null;let s=o.replace(/^#+\s*/,"").replace(/^(\u4E3B\u4EBA|\u52A9\u624B|assistant|user)[\s,\uFF0C:\uFF1A\u3001]+/i,"").replace(/^\(([^()]{1,8})\)\s*/,"\uFF08$1\uFF09 ").replace(/^[\s"'`\u201C\u201D\u2018\u2019]+|[\s"'`\u201C\u201D\u2018\u2019]+$/g,"").replace(/[.\u3002!\uFF01?\uFF1F:\uFF1A,\uFF0C;\uFF1B]+$/g,"").replace(/\s+/g," ").trim();if(!/[A-Za-z0-9\u3400-\u9FFF]/.test(s))return null;let m=s.match(/^\uFF08([^\uFF09]{1,10})\uFF09\s*/);if(m){let p=m[1],a=["\u4FEE\u590D","\u65B0\u589E","\u8BBE\u8BA1","\u6392\u67E5","\u5206\u6790","\u5176\u4ED6"];if(!a.includes(p)){p=/\u6392\u67E5|\u8BCA\u65AD|\u5B9A\u4F4D|\u62A5\u9519|\u5F02\u5E38|\u5931\u8D25|bug|\u95EE\u9898/i.test(p)?"\u6392\u67E5":/\u4FEE\u590D|\u4FEE\u6B63|\u89E3\u51B3|fix/i.test(p)?"\u4FEE\u590D":/\u65B0\u589E|\u5B9E\u73B0|\u5F00\u53D1|\u6DFB\u52A0/i.test(p)?"\u65B0\u589E":/\u8BBE\u8BA1|\u65B9\u6848|\u67B6\u6784/i.test(p)?"\u8BBE\u8BA1":/\u5206\u6790|\u539F\u56E0|\u539F\u7406|\u7814\u7A76/i.test(p)?"\u5206\u6790":"\u5176\u4ED6";s="\uFF08"+p+"\uFF09 "+s.slice(m[0].length)}else if(!/\s/.test(s.slice(m[0].length))){s="\uFF08"+p+"\uFF09 "+s.slice(m[0].length)}}else{let p=/\u62A5\u9519|\u5F02\u5E38|\u5931\u8D25|\u4E0D\u80FD|\u65E0\u6CD5|\u767D\u5C4F|404|500/i.test(s)?"\u6392\u67E5":/\u4FEE\u590D|\u4FEE\u6B63|\u89E3\u51B3/i.test(s)?"\u4FEE\u590D":/\u65B0\u589E|\u5B9E\u73B0|\u5F00\u53D1|\u6DFB\u52A0/i.test(s)?"\u65B0\u589E":/\u8BBE\u8BA1|\u65B9\u6848|\u67B6\u6784/i.test(s)?"\u8BBE\u8BA1":/\u5206\u6790|\u539F\u56E0|\u539F\u7406|\u5BF9\u6BD4|\u7814\u7A76/i.test(s)?"\u5206\u6790":"\u5176\u4ED6";s="\uFF08"+p+"\uFF09 "+s}return s.length>yxo?`${s.slice(0,yxo-3).trim()}...`:s}
 '@
 $v6Vba = $v6Vba.TrimEnd("`r","`n")
+
+# ---- v7 signatures: task-type prefix glued to the topic (no separator space) ----
+# v6 rebuilt the prefix as "(type) " + topic, forcing one space between the
+# closing bracket and the text even though the rule is full-width parens
+# followed directly by the content ("(type)topic").
+# v7 drops that space and also swallows the whitespace the model may emit after
+# the closing parenthesis, so the stored title never carries a variable gap.
+$v7Marker = '/*ZCODE-TITLE-V7*/'
+$v7Vba = @'
+function vba(e){/*ZCODE-TITLE-V7*/let t=e.replace(/<think>[\s\S]*?<\/think>/gi,"").trim(),o=bba(t)??kba(t);if(!o)return null;let s=o.replace(/^#+\s*/,"").replace(/^(\u4E3B\u4EBA|\u52A9\u624B|assistant|user)[\s,\uFF0C:\uFF1A\u3001]+/i,"").replace(/^\(([^()]{1,8})\)\s*/,"\uFF08$1\uFF09").replace(/^[\s"'`\u201C\u201D\u2018\u2019]+|[\s"'`\u201C\u201D\u2018\u2019]+$/g,"").replace(/[.\u3002!\uFF01?\uFF1F:\uFF1A,\uFF0C;\uFF1B]+$/g,"").replace(/\s+/g," ").trim();if(!/[A-Za-z0-9\u3400-\u9FFF]/.test(s))return null;let m=s.match(/^\uFF08([^\uFF09]{1,10})\uFF09\s*/);if(m){let p=m[1],a=["\u4FEE\u590D","\u65B0\u589E","\u8BBE\u8BA1","\u6392\u67E5","\u5206\u6790","\u5176\u4ED6"];if(!a.includes(p)){p=/\u6392\u67E5|\u8BCA\u65AD|\u5B9A\u4F4D|\u62A5\u9519|\u5F02\u5E38|\u5931\u8D25|bug|\u95EE\u9898/i.test(p)?"\u6392\u67E5":/\u4FEE\u590D|\u4FEE\u6B63|\u89E3\u51B3|fix/i.test(p)?"\u4FEE\u590D":/\u65B0\u589E|\u5B9E\u73B0|\u5F00\u53D1|\u6DFB\u52A0/i.test(p)?"\u65B0\u589E":/\u8BBE\u8BA1|\u65B9\u6848|\u67B6\u6784/i.test(p)?"\u8BBE\u8BA1":/\u5206\u6790|\u539F\u56E0|\u539F\u7406|\u7814\u7A76/i.test(p)?"\u5206\u6790":"\u5176\u4ED6"}s="\uFF08"+p+"\uFF09"+s.slice(m[0].length)}else{let p=/\u62A5\u9519|\u5F02\u5E38|\u5931\u8D25|\u4E0D\u80FD|\u65E0\u6CD5|\u767D\u5C4F|404|500/i.test(s)?"\u6392\u67E5":/\u4FEE\u590D|\u4FEE\u6B63|\u89E3\u51B3/i.test(s)?"\u4FEE\u590D":/\u65B0\u589E|\u5B9E\u73B0|\u5F00\u53D1|\u6DFB\u52A0/i.test(s)?"\u65B0\u589E":/\u8BBE\u8BA1|\u65B9\u6848|\u67B6\u6784/i.test(s)?"\u8BBE\u8BA1":/\u5206\u6790|\u539F\u56E0|\u539F\u7406|\u5BF9\u6BD4|\u7814\u7A76/i.test(s)?"\u5206\u6790":"\u5176\u4ED6";s="\uFF08"+p+"\uFF09"+s}return s.length>yxo?`${s.slice(0,yxo-3).trim()}...`:s}
+'@
+$v7Vba = $v7Vba.TrimEnd("`r","`n")
+
 $v6Sba = @'
 function Sba(e){try{let t=JSON.parse(e);if(!t||typeof t!="object"||!("title"in t))return null;let n=t.title;return typeof n=="string"&&n.length>0&&n.length<=120&&!/[\r\n]/.test(n)?n:null}catch{return null}}
 '@
@@ -233,6 +249,20 @@ function Apply-V6([string]$js) {
     return $js
 }
 
+# Replace the whole vba cleanup with the v7 form (prefix glued to the topic).
+# The anchor is a regex, not a literal string: a v6 file may carry the Chinese
+# type names either as raw UTF-8 or as \uXXXX escapes, and both must match.
+function Apply-V7([string]$js) {
+    $c = Count-Str $js $v7Marker
+    if ($c -eq 1) { return $js }
+    if ($c -gt 1) { throw 'v7 marker duplicated.' }
+    $m = [regex]::Match($js, '(?s)function vba\(e\)\{.*?function bba')
+    if (-not $m.Success) { throw 'v7 vba anchor not found.' }
+    $old = $m.Value.Substring(0, $m.Value.Length - 'function bba'.Length)
+    $js = $js.Replace($old, $v7Vba)
+    if ((Count-Str $js $v7Marker) -ne 1) { throw 'v7 marker missing after patch.' }
+    return $js
+}
 
 function Apply-Refresh([string]$js) {
     $c = Count-Str $js $refreshPrefix
@@ -322,14 +352,15 @@ $text    = $latin1.GetString($bytes)
 $cjsHash = Hash-Bytes $bytes
 
 $hasRefresh = ((Count-Str $text $refreshPrefix) -gt 0)
+$isV7 = ((Count-Str $text $v7Marker) -eq 1)
 $isV6 = ((Count-Str $text $v6Marker) -eq 1)
 $isV5 = ((Count-Str $text $overallMarker) -eq 1 -and (Count-Str $text $promptHead) -eq 1 -and (Count-Str $text $oldPrompt) -eq 0 -and -not $isV6)
 $isV4 = ((Count-Str $text $deferMarker) -eq 1 -and (Count-Str $text 'String(_||"").slice(0,600)') -eq 1 -and (Count-Str $text $retryNew) -eq 1)
 $isClean = ((Count-Str $text $eligA) -eq 1 -and (Count-Str $text $eligB) -eq 1 -and (Count-Str $text $oldLang) -eq 1)
 $isBase  = ((Count-Str $text $patchedA) -eq 1 -and (Count-Str $text $patchedB) -eq 1 -and (Count-Str $text $newLang) -eq 1 -and (Count-Str $text $oldLang) -eq 0)
 
-if ($isV6 -and $hasRefresh) {
-    Write-Host '[1/4] v6 title + refresh patch already present; nothing to patch.'
+if ($isV7 -and $hasRefresh) {
+    Write-Host '[1/4] v7 title + refresh patch already present; nothing to patch.'
     if ($NoRestart) {
         Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
     } elseif ($zcodeExe) {
@@ -341,9 +372,9 @@ if ($isV6 -and $hasRefresh) {
     exit 0
 }
 if (-not $isClean -and -not $isBase -and -not $isV4 -and -not $isV5 -and -not $isV6) {
-    throw "unknown zcode.cjs state for $tag (clean=$isClean base=$isBase v4=$isV4 v5=$isV5 v6=$isV6 refresh=$hasRefresh). ZCode version changed? This v6 patch supports only $tag. Refusing."
+    throw "unknown zcode.cjs state for $tag (clean=$isClean base=$isBase v4=$isV4 v5=$isV5 v6=$isV6 v7=$isV7 refresh=$hasRefresh). ZCode version changed? This v7 patch supports only $tag. Refusing."
 }
-Write-Host ("[1/4] state: " + $(if ($isV6) { 'v6 title patch present (adding refresh)' } elseif ($isV5) { 'v5 title patch present (upgrading to v6 + refresh)' } elseif ($isV4) { 'v4 last-turn patch present (upgrading to v6 + refresh)' } elseif ($isClean) { 'unpatched (clean)' } else { 'base title fix present' }) + " (ZCode $tag)")
+Write-Host ("[1/4] state: " + $(if ($isV7) { 'v7 title patch present (adding refresh)' } elseif ($isV6) { 'v6 title patch present (upgrading to v7)' } elseif ($isV5) { 'v5 title patch present (upgrading to v6 + refresh)' } elseif ($isV4) { 'v4 last-turn patch present (upgrading to v6 + refresh)' } elseif ($isClean) { 'unpatched (clean)' } else { 'base title fix present' }) + " (ZCode $tag)")
 
 # 2) clean baseline for restore: verify/reuse backup, or reconstruct it.
 #    A v4/v5 in-place upgrade must NOT reconstruct a fake clean baseline from
@@ -486,6 +517,16 @@ if (-not $isV6) {
     Write-Host '[3/5] v6 title patch applied (six task types; strict parser)'
 }
 
+# v7 replacements: the task-type prefix carries no separator space.
+if (-not $isV7) {
+    $patched = Apply-V7 $patched
+    if ((Count-Str $patched $v7Marker) -ne 1) { throw 'v7 marker missing after patch.' }
+    $mv = [regex]::Match($patched, '(?s)function vba\(e\)\{.*?function bba')
+    if (-not $mv.Success -or $mv.Value.IndexOf($v7Marker) -lt 0) { throw 'v7 vba missing after patch.' }
+    if (-not (Test-JsSyntax $patched)) { throw 'node --check failed after v7 patch; refusing to write.' }
+    Write-Host '[3/5] v7 title patch applied (no space between the task-type prefix and the topic)'
+}
+
 
 # integrated refresh stage (former tool 8).
 if ($hasRefresh) {
@@ -509,10 +550,10 @@ if (-not (Test-JsSyntax $patched)) { throw 'node --check failed after patch; ref
 
 $newBytes = $latin1.GetBytes($patched)
 if ((Hash-Bytes $newBytes) -eq $cjsHash) {
-    Write-Host '[3/4] zcode.cjs already carries the v5 title patch, nothing to write'
+    Write-Host '[3/4] zcode.cjs already carries the v7 title patch, nothing to write'
 } else {
     [System.IO.File]::WriteAllBytes($cjsPath, $newBytes)
-    Write-Host "[3/4] v6 title + refresh patch written (ZCode $tag; six task types; every $RefreshTurns turns)"
+    Write-Host "[3/4] v7 title + refresh patch written (ZCode $tag; six task types; every $RefreshTurns turns)"
 }
 
 if ($NoRestart) {
@@ -523,4 +564,4 @@ if ($NoRestart) {
 } else {
     Write-Host '[4/4] done. Start ZCode manually.'
 }
-Write-Host "Titles now use (修复/新增/设计/排查/分析/其他) + summary and refresh every $RefreshTurns successful turns; assistant replies are never used as title input."
+Write-Host "Titles now use (修复/新增/设计/排查/分析/其他) glued to the summary with no separator space, and refresh every $RefreshTurns successful turns; assistant replies are never used as title input."
