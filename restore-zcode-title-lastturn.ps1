@@ -241,7 +241,8 @@ if ((Count-Str $text $v9M4aCatch) -gt 0) {
 # session-level reasoning (/*ZCODE-TITLE-LEVEL*/): restore the official PP() bind call
 $reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
 $officialBind = 'a=i.bind(PP(i)),c=A0(o)'
-$mvl = [regex]::Match($text, [regex]::Escape('a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(5e3,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)') + [regex]::Escape($reasoningMarker))
+# tolerate any historical maxOutputTokens cap (5e3 / 2e4, ...) in the bind call
+$mvl = [regex]::Match($text, 'a=i\.bind\(\{reasoningLevel:o\?\.options\?\.reasoningLevel\?\?i\.optionSpecs\.reasoningLevel\.values\[0\],maxOutputTokens:Math\.min\([0-9e]+,i\.optionSpecs\.maxOutputTokens\.max\)\}\),c=A0\(o\)' + [regex]::Escape($reasoningMarker))
 if ($mvl.Success) {
     $text = $text.Replace($mvl.Value, $officialBind)
 }

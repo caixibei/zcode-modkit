@@ -147,10 +147,13 @@ $officialZkt = 'let c=await Zkt.call(this,e,{causation:o.causation,modelContext:
 # session's own max-level requests succeed (35/35). The title bind call inside
 # v4a is therefore patched to pass the SESSION's current reasoning level
 # (fallback: the official values[0] when the session selection has none).
+# maxOutputTokens is raised 5e3 -> 2e4: at max reasoning level the model's
+# thinking can exhaust a 5000-token output budget before emitting the title,
+# which the provider reports as a request failure (observed on long sessions).
 # Anchor verified unique.
 $officialBind = 'a=i.bind(PP(i)),c=A0(o)'
 $reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
-$v9Bind = 'a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(5e3,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)' + $reasoningMarker
+$v9Bind = 'a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(2e4,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)' + $reasoningMarker
 
 # cooldown/refresh markers
 $refreshPrefix = '/*ZCODE-TITLE-REFRESH:'
