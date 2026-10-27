@@ -20,7 +20,7 @@ $backupPath = Join-Path $PSScriptRoot 'app.asar.updates-backup'
 $hashPath   = Join-Path $PSScriptRoot 'app.asar.updates-backup.sha256'
 
 $mainRelPath = 'out/main/index.js'
-$oldFrag = 'enabled:Ge==="production"'        # 25 bytes (clean original)
+$oldFrag = 'enabled:pt==="production"'        # 25 bytes (clean original; 3.14.1 named the var Ge)
 $newFrag = 'enabled:!1/*xxxxxxxxxxx*/'        # 25 bytes (patched)
 
 function Count-Str([string]$hay, [string]$s) {

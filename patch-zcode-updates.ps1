@@ -1,10 +1,11 @@
 # ZCode desktop update-check disable patch (v1, portable) - save as UTF-8 WITHOUT BOM
 # - Disables the desktop updater so ZCode never checks for updates and the green
 #   "更新" chip in the sidebar never appears. Users update manually when they want.
-# - Mechanism (ZCode 3.14.1, verified by static analysis of app.asar):
+# - Mechanism (ZCode 3.16.3, verified by static analysis of app.asar; the same
+#   initAutoUpdater entry exists in 3.14.1, only the minified var name changed):
 #   * out/main/index.js has ONE updater init entry: initAutoUpdater (minified: Ly),
-#     called once as  Ly({enabled:Ge==="production",...})  where Ge is a build-time
-#     constant equal to "production".
+#     called once as  Ly({enabled:pt==="production",...})  where pt is a build-time
+#     constant equal to "production" (3.14.1 named it Ge).
 #   * Ly's first branch is the app's own "product flavor disabled" switch:
 #     if(e.enabled===!1){Gd=!0; clearInterval(poll timer); return}
 #     With Gd set: no startup check, no hourly poll (mM=3600e3 never scheduled),
@@ -12,7 +13,7 @@
 #     and manual "Check for updates" replies {kind:"dev-skipped"} (renderer shows
 #     the "开发环境不检查更新" toast and no badge).
 # - Patch = equal-length (25 bytes) in-place replacement inside app.asar:
-#     enabled:Ge==="production"   ->   enabled:!1/*xxxxxxxxxxx*/
+#     enabled:pt==="production"   ->   enabled:!1/*xxxxxxxxxxx*/
 #   asar header offsets/sizes stay intact; every other byte untouched.
 # - The green chip is rendered by the renderer from main's update state only
 #   (getUpdateState IPC + UpdateStateChanged events); with the updater disabled
@@ -38,11 +39,11 @@ $latin1 = [System.Text.Encoding]::GetEncoding(28591)  # lossless byte<->char rou
 $backupPath = Join-Path $PSScriptRoot 'app.asar.updates-backup'
 $hashPath   = Join-Path $PSScriptRoot 'app.asar.updates-backup.sha256'
 
-# ---- the main-process bundle this kit patches (ZCode 3.14.1) ----
+# ---- the main-process bundle this kit patches (ZCode 3.14.1 / 3.16.3) ----
 $mainRelPath = 'out/main/index.js'
 
 # original fragment: must occur exactly once in out/main/index.js
-$oldFrag = 'enabled:Ge==="production"'        # 25 bytes
+$oldFrag = 'enabled:pt==="production"'        # 25 bytes
 # patched fragment: equal length; JS comment filler keeps the bundle valid
 $newFrag = 'enabled:!1/*xxxxxxxxxxx*/'        # 25 bytes
 

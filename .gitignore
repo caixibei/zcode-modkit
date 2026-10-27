@@ -6,3 +6,4 @@ app.asar.gwp-backup
 zcode.cjs.usage-backup
 zcode.cjs.v6-backup
 zcode.cjs.v6-backup.sha256
+.verify/

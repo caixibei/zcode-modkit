@@ -20,14 +20,14 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $tasks = @(
     [pscustomobject]@{ Id = '1'; Kind = 'patch';   Label = 'UI font patch';            Script = 'patch-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title fix + refresh (default 5 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
+    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title: task-type prefix + refresh (3.16.3, default 5 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '3'; Kind = 'patch';   Label = 'wallpaper patch';          Script = 'patch-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
     [pscustomobject]@{ Id = '6'; Kind = 'patch';   Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
     [pscustomobject]@{ Id = '7'; Kind = 'patch';   Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
     [pscustomobject]@{ Id = '9'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore title fix + refresh'; Script = 'restore-zcode-title-lastturn.ps1' },
+    [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore title prefix + refresh'; Script = 'restore-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '11'; Kind = 'restore'; Label = 'restore wallpaper';       Script = 'restore-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 're-enable update checks'; Script = 'restore-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '13'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },

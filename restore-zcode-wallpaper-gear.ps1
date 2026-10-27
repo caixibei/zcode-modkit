@@ -21,7 +21,21 @@ $hashPath   = Join-Path $PSScriptRoot 'app.asar.gwp-backup.sha256'
 
 $markerBegin = '/* ZCODE-GWP-GEAR-WALLPAPER-BEGIN */'
 $markerEnd   = '/* ZCODE-GWP-GEAR-WALLPAPER-END */'
-$cssRelPath  = 'out/renderer/assets/styles-C8Nayk5k.css'
+# stylesheet name carries a build hash (3.16.3: styles-9Z13W0KP.css), resolved
+# from the asar header at runtime via Resolve-RendererCss
+$cssRelPath  = $null
+
+function Resolve-RendererCss($asar) {
+    # pick the main renderer stylesheet: out/renderer/assets/styles-*.css
+    # (exactly one; the sibling styles-*.js bundle is not matched)
+    $assets = $asar.header.files.out.files.renderer.files.assets
+    $hits = @()
+    foreach ($p in $assets.files.PSObject.Properties) {
+        if ($p.Name -like 'styles-*.css' -and -not $p.Value.unpacked -and -not $p.Value.link) { $hits += $p.Name }
+    }
+    if ($hits.Count -eq 1) { return "out/renderer/assets/$($hits[0])" }
+    throw "cannot identify the renderer stylesheet in this ZCode build (styles-*.css hits: $($hits.Count)). Version changed? Refusing."
+}
 
 function Count-Str([string]$hay, [string]$s) {
     return ([regex]::Matches($hay, [regex]::Escape($s))).Count
@@ -96,8 +110,36 @@ function Remove-Integrity($node) {
     }
 }
 
+# Electron asar integrity: SHA256 of the whole payload (hex) plus SHA256 of
+# every 4 MiB block (hex), matching electron/asar's filesystem integrity
+# format verified against the 3.16.3 header.
+function New-AsarIntegrity([byte[]]$bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $blocks = New-Object System.Collections.Generic.List[string]
+        $blockSize = 4194304
+        for ($off = 0; $off -lt $bytes.Length; $off += $blockSize) {
+            $len = [Math]::Min($blockSize, $bytes.Length - $off)
+            $chunk = New-Object byte[] $len
+            [Array]::Copy($bytes, $off, $chunk, 0, $len)
+            [void]$blocks.Add((Hash-Bytes $chunk).ToLowerInvariant())
+        }
+        return @{
+            algorithm = 'SHA256'
+            hash      = (Hash-Bytes $bytes).ToLowerInvariant()
+            blockSize = $blockSize
+            blocks    = $blocks.ToArray()
+        }
+    } finally {
+        $sha.Dispose()
+    }
+}
+function Hash-Bytes([byte[]]$b) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return (($sha.ComputeHash($b) | ForEach-Object { $_.ToString('X2') }) -join '') } finally { $sha.Dispose() }
+}
+
 function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath) {
-    Remove-Integrity $asar.header
     # Walk-Assign2 below rewrites offsets in place, so it must walk a CLONE of
     # the header: a second Write-Asar call on the same $asar would otherwise
     # treat already-shifted offsets as source positions and corrupt every
@@ -124,6 +166,9 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
         if ($path -eq $script:gwp_rel) {
             $newSize = [long]$script:gwp_new.Length
             $node.size = $newSize
+            if ($node.PSObject.Properties['integrity'] -and $null -ne $node.integrity) {
+                $node.integrity = New-AsarIntegrity $script:gwp_new
+            }
         }
         $node.offset = [string]$script:gwp_cursor
         $script:gwp_cursor += $newSize
@@ -208,6 +253,7 @@ if (-not $TargetAsar) {
 
 # current state
 $asar = Read-Asar $asarPath
+$cssRelPath = Resolve-RendererCss $asar
 $cssHit = Get-CssEntryAndBytes $asar $cssRelPath
 if (-not $cssHit) { throw "renderer css not found ($cssRelPath); cannot restore." }
 $cssText = [System.Text.Encoding]::UTF8.GetString($cssHit.bytes)
