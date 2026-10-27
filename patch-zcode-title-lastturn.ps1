@@ -321,12 +321,31 @@ if (Test-Path $backupPath) {
             $needBackupWrite = $false
             Write-Host '[2/4] clean backup verified'
         } else {
-            $existingLen = (Get-Item $backupPath).Length
-            Write-Host "[X] existing backup does not match the current clean file (len $existingLen vs $($baseBytes.Length))." -ForegroundColor Red
-            Write-Host '    The backup belongs to a different ZCode build; refusing to reuse or overwrite it.' -ForegroundColor Red
-            Write-Host '    Delete the stale zcode.cjs.title-backup files to let this script take a fresh baseline.' -ForegroundColor Yellow
-            Read-Host 'Press Enter to exit'
-            exit 1
+            # the backup and the current clean file may legitimately differ:
+            # the current file can carry OTHER zcode.cjs patches (usage
+            # retention), which the title backup must NOT include. The backup
+            # is only stale if it is not a valid FACTORY baseline - i.e. it
+            # contains any of this kit's title/usage patch signatures, or its
+            # title chain does not match the official 3.16.3 forms.
+            $bt = $latin1.GetString([System.IO.File]::ReadAllBytes($backupPath))
+            $bkIsV9       = ((Count-Str $bt $v9Marker) -gt 0)
+            $bkHasRefresh = ((Count-Str $bt $refreshPrefix) -gt 0)
+            $bkUsagePatched = ((Count-Str $bt '=9e15/*') -gt 0)
+            $bkOfficialChain = ((Count-Str $bt $officialPrompt) -eq 1 -and (Count-Str $bt $officialS4aHead) -eq 1 -and (Count-Str $bt $officialB4a) -eq 1)
+            if (-not $bkIsV9 -and -not $bkHasRefresh -and -not $bkUsagePatched -and $bkOfficialChain -and ((Get-Item $backupPath).Length -eq $baseBytes.Length)) {
+                # factory baseline of this build with a different combination of
+                # other-patch state; keep it, the title patch itself lives on
+                # top of it and restore reverses in place first anyway
+                $needBackupWrite = $false
+                Write-Host '[2/4] factory title backup kept (differs from the current file only by other kits patches: usage retention).'
+            } else {
+                $existingLen = (Get-Item $backupPath).Length
+                Write-Host "[X] existing backup does not match the current clean file (len $existingLen vs $($baseBytes.Length))." -ForegroundColor Red
+                Write-Host '    The backup belongs to a different ZCode build; refusing to reuse or overwrite it.' -ForegroundColor Red
+                Write-Host '    Delete the stale zcode.cjs.title-backup files to let this script take a fresh baseline.' -ForegroundColor Yellow
+                Read-Host 'Press Enter to exit'
+                exit 1
+            }
         }
     }
 }
