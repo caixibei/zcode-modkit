@@ -238,6 +238,13 @@ $v9M4aCatch = '.catch(async a=>{' + $retryMarker + 'this.sessionTitleGenerationA
 if ((Count-Str $text $v9M4aCatch) -gt 0) {
     $text = $text.Replace($v9M4aCatch, $officialM4aCatch)
 }
+# session-level reasoning (/*ZCODE-TITLE-LEVEL*/): restore the official PP() bind call
+$reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
+$officialBind = 'a=i.bind(PP(i)),c=A0(o)'
+$mvl = [regex]::Match($text, [regex]::Escape('a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(5e3,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)') + [regex]::Escape($reasoningMarker))
+if ($mvl.Success) {
+    $text = $text.Replace($mvl.Value, $officialBind)
+}
 # the filler replaced "||e.turnNumber!==0" inside D4a; restore that exact tail
 $text = $text.Replace($turnGuardFiller + $turnGuardCtx, $officialTurnGuard + $turnGuardCtx)
 $text = $text.Replace($v9Zkt, $officialZkt)
@@ -252,6 +259,7 @@ if ((Count-Str $text $overallMarker) -ne 0) { throw 'overall digest marker still
 if ((Count-Str $text $refreshPrefix) -ne 0) { throw 'refresh marker still present after reverse; refusing.' }
 if ((Count-Str $text $refreshSameMarker) -ne 0) { throw 'same-title marker still present after reverse; refusing.' }
 if ((Count-Str $text $retryMarker) -ne 0) { throw 'retry marker still present after reverse; refusing.' }
+if ((Count-Str $text $reasoningMarker) -ne 0) { throw 'reasoning-level marker still present after reverse; refusing.' }
 if ((Count-Str $text $officialPrompt) -ne 1) { throw 'official prompt not restored.' }
 if ((Count-Str $text $officialS4a) -ne 1) { throw 'official S4a not restored.' }
 if ((Count-Str $text $officialB4a) -ne 1) { throw 'official b4a not restored.' }

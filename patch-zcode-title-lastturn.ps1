@@ -140,6 +140,18 @@ $officialOba = 'let n=t.title,o=await this.sessionStore?.updateSession({expected
 # official M4a Zkt call (two-stage digest injection point)
 $officialZkt = 'let c=await Zkt.call(this,e,{causation:o.causation,modelContext:o.modelContext,messageID:t,querySource:v2n,traceContext:n})'
 
+# auxiliary-model reasoning level: official PP() (auxiliaryModelOptions) pins
+# reasoningLevel to optionSpecs.reasoningLevel.values[0] ("low" for many
+# providers). On magpie/volcengine/GLM-5.3-Flash every low-level title request
+# fails ("Model request failed", 21/21 in observed usage data) while the
+# session's own max-level requests succeed (35/35). The title bind call inside
+# v4a is therefore patched to pass the SESSION's current reasoning level
+# (fallback: the official values[0] when the session selection has none).
+# Anchor verified unique.
+$officialBind = 'a=i.bind(PP(i)),c=A0(o)'
+$reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
+$v9Bind = 'a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(5e3,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)' + $reasoningMarker
+
 # cooldown/refresh markers
 $refreshPrefix = '/*ZCODE-TITLE-REFRESH:'
 $refreshMarker = $refreshPrefix + $RefreshTurns + '*/'
@@ -268,8 +280,9 @@ if ($isV9 -and $hasRefresh) {
     $hasRetry  = ((Count-Str $text $retryMarker) -gt 0)
     # 18-type prompt contains the escapes for 重构 (\u91CD\u6784); the six-type one does not
     $isCurrentPrompt = ((Count-Str $text ('\u91CD\u6784')) -ge 1)
-    if ($oldN -eq $RefreshTurns -and $hasRetry -and $isCurrentPrompt) {
-        Write-Host '[1/4] v9 title patch already present (18 types, retry, same cadence); nothing to patch.'
+    $hasLevel = ((Count-Str $text $reasoningMarker) -gt 0)
+    if ($oldN -eq $RefreshTurns -and $hasRetry -and $isCurrentPrompt -and $hasLevel) {
+        Write-Host '[1/4] v9 title patch already present (18 types, retry, session-level reasoning, same cadence); nothing to patch.'
         if ($NoRestart) {
             Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
         } elseif ($zcodeExe) {
@@ -280,7 +293,7 @@ if ($isV9 -and $hasRefresh) {
         }
         exit 0
     }
-    Write-Host "[1/4] v9 present (cadence $oldN, retry=$hasRetry, 18types=$isCurrentPrompt); rebuilding in place."
+    Write-Host "[1/4] v9 present (cadence $oldN, retry=$hasRetry, 18types=$isCurrentPrompt, level=$hasLevel); rebuilding in place."
     $restoreScript = Join-Path $PSScriptRoot 'restore-zcode-title-lastturn.ps1'
     $restoreArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $restoreScript, '-NoRestart', '-BackupDir', $BackupDir)
     if ($TargetCjs) { $restoreArgs += @('-TargetCjs', $TargetCjs) }
@@ -396,6 +409,10 @@ $patched = $patched.Replace($officialOba, $refreshObaNew)
 if ((Count-Str $patched $officialM4aCatch) -ne 1) { throw 'M4a catch anchor not unique; refusing.' }
 $patched = $patched.Replace($officialM4aCatch, $v9M4aCatch)
 
+# 3i) session-level reasoning for the title model (official PP pins values[0]=low)
+if ((Count-Str $patched $officialBind) -ne 1) { throw 'title bind anchor not unique; refusing.' }
+$patched = $patched.Replace($officialBind, $v9Bind)
+
 # 4) post-conditions + syntax gate
 if ((Count-Str $patched $v9Marker) -ne 2) { throw 'v9 markers missing or duplicated after patch.' }
 if ((Count-Str $patched $refreshPrefix) -ne 1) { throw 'refresh marker missing after patch.' }
@@ -404,6 +421,7 @@ if ((Count-Str $patched $refreshObaNew) -ne 1) { throw 'same-title skip block mi
 if ((Count-Str $patched $overallMarker) -ne 1) { throw 'overall digest marker missing.' }
 if ((Count-Str $patched $v9Zkt) -ne 1) { throw 'two-stage Zkt call missing.' }
 if ((Count-Str $patched $retryMarker) -ne 1) { throw 'failure retry marker missing.' }
+if ((Count-Str $patched $reasoningMarker) -ne 1) { throw 'reasoning-level marker missing.' }
 if ((Count-Str $patched $officialPrompt) -ne 0) { throw 'official prompt still present after patch.' }
 if ((Count-Str $patched $officialS4aHead) -ne 0) { throw 'official S4a still present after patch.' }
 if ((Count-Str $patched $officialTurnGuard) -ne 0) { throw 'turn guard still present after patch.' }
