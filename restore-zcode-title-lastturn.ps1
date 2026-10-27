@@ -228,6 +228,16 @@ $v9Zkt = $mz.Value
 
 $text = $text.Replace($refreshWwnNew, $officialWwn)
 $text = $text.Replace($refreshObaNew, $officialOba)
+# failure retry reset (/*ZCODE-TITLE-RETRY*/ + attempted=!1) back to the official catch
+# $officialM4aCatchBody is the catch BODY (everything after ".catch(async a=>{",
+# including the closing "}"), matching patch-zcode-title-lastturn.ps1's $officialM4aCatchBody
+$officialM4aCatchBody = 'this.logger?.warn("Session title generation failed",{...Sr(t.traceContext),errorMessage:a instanceof Error?a.message:String(a),event:"session_title_generation.failed",module:"core.runtime",status:"failed"})'
+$officialM4aCatch = '.catch(async a=>{' + $officialM4aCatchBody
+$retryMarker = '/*ZCODE-TITLE-RETRY*/'
+$v9M4aCatch = '.catch(async a=>{' + $retryMarker + 'this.sessionTitleGenerationAttempted=!1;' + $officialM4aCatchBody
+if ((Count-Str $text $v9M4aCatch) -gt 0) {
+    $text = $text.Replace($v9M4aCatch, $officialM4aCatch)
+}
 # the filler replaced "||e.turnNumber!==0" inside D4a; restore that exact tail
 $text = $text.Replace($turnGuardFiller + $turnGuardCtx, $officialTurnGuard + $turnGuardCtx)
 $text = $text.Replace($v9Zkt, $officialZkt)
@@ -241,6 +251,7 @@ if ((Count-Str $text $v9Marker) -ne 0) { throw 'v9 markers still present after r
 if ((Count-Str $text $overallMarker) -ne 0) { throw 'overall digest marker still present after reverse; refusing.' }
 if ((Count-Str $text $refreshPrefix) -ne 0) { throw 'refresh marker still present after reverse; refusing.' }
 if ((Count-Str $text $refreshSameMarker) -ne 0) { throw 'same-title marker still present after reverse; refusing.' }
+if ((Count-Str $text $retryMarker) -ne 0) { throw 'retry marker still present after reverse; refusing.' }
 if ((Count-Str $text $officialPrompt) -ne 1) { throw 'official prompt not restored.' }
 if ((Count-Str $text $officialS4a) -ne 1) { throw 'official S4a not restored.' }
 if ((Count-Str $text $officialB4a) -ne 1) { throw 'official b4a not restored.' }

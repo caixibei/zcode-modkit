@@ -10,7 +10,11 @@
 #   manual install dir) still come from the underlying scripts; run tasks one
 #   at a time if you prefer. Exits automatically when done; pauses only on errors.
 # Save as UTF-8 WITHOUT BOM
-param([string]$PsExe = 'powershell')   # host used to run the sub scripts
+param(
+    [string]$PsExe = 'powershell',   # host used to run the sub scripts
+    [ValidateRange(1, 100)]
+    [int]$RefreshTurns = 3  # title patch [2]: re-title after every N successful turns
+)
 $ErrorActionPreference = 'Continue'
 # Clear NODE_OPTIONS from this process so the ZCode.exe we (re)start never
 # inherits unsupported flags (packaged Electron apps print a startup ERROR for
@@ -20,7 +24,7 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $tasks = @(
     [pscustomobject]@{ Id = '1'; Kind = 'patch';   Label = 'UI font patch';            Script = 'patch-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title: task-type prefix + refresh (3.16.3, default 5 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
+    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title: task-type prefix + refresh (3.16.3, default 3 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '3'; Kind = 'patch';   Label = 'wallpaper patch';          Script = 'patch-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
@@ -93,6 +97,17 @@ $chosen = $chosen | Sort-Object { [int]$_.Id } -Unique
 Write-Host ''
 Write-Host 'will run:' -ForegroundColor Cyan
 foreach ($t in $chosen) { Write-Host ("  [{0}] {1} ({2})" -f $t.Id, $t.Label, $t.Script) }
+# interactive override for the title-refresh cadence (same pattern as the
+# wallpaper veil prompt): only asked when task [2] is selected and the value
+# was not already given on the command line
+$hasTitleTask = ($chosen | Where-Object { $_.Script -eq 'patch-zcode-title-lastturn.ps1' }) -ne $null
+$refreshTurnsFromCmd = $PSBoundParameters.ContainsKey('RefreshTurns')
+if ($hasTitleTask -and -not $refreshTurnsFromCmd) {
+    Write-Host ''
+    Write-Host ("title re-title cadence: re-title after every N successful turns [current: {0}]" -f $RefreshTurns)
+    $rt = Read-Host 'N (Enter keeps the current value)'
+    if ($rt -match '^\d+$' -and [int]$rt -ge 1 -and [int]$rt -le 100) { $RefreshTurns = [int]$rt }
+}
 $confirm = Read-Host 'continue? [Y/n]'
 if ($confirm -match '^[nN]') { exit 0 }
 
@@ -103,7 +118,11 @@ foreach ($t in $chosen) {
     $i++
     Write-Host ''
     Write-Host ("===== task {0}/{1}: [{2}] {3} =====" -f $i, $chosen.Count, $t.Id, $t.Label) -ForegroundColor Cyan
-    & $PsExe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot $t.Script) -NoRestart
+    # only the title patch accepts -RefreshTurns; the other scripts have no
+    # such parameter and must not receive it
+    $scriptArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', (Join-Path $PSScriptRoot $t.Script), '-NoRestart')
+    if ($t.Script -eq 'patch-zcode-title-lastturn.ps1') { $scriptArgs += @('-RefreshTurns', $RefreshTurns) }
+    & $PsExe @scriptArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Host ("[X] task [{0}] {1} exited with code {2}; batch stopped." -f $t.Id, $t.Label, $LASTEXITCODE) -ForegroundColor Red
         $failed = $true

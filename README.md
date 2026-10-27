@@ -23,7 +23,7 @@
 ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.16.3**（上一适配版本 3.14.1 的脚本快照见 GitHub Release `zcode-3.14.1`）：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
-2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v9）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（修复/新增/设计/排查/分析/其他）任务总结`（六类前缀，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼
+2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v9）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
 3. **桌面壁纸补丁**（`patch-zcode-wallpaper`）——把窗口根背景换成自选照片（半透明主题色纱罩保证可读性）
 4. **更新检查禁用补丁**（`patch-zcode-updates`）——彻底关闭自动更新检测，侧边栏不再出现绿色「更新」徽标；想升级时自行下载安装包
 5. **定时任务时区修复补丁**（`patch-zcode-timezone`）——让 ZCode 的 cron 定时任务按上海时间（UTC+8）触发，修复系统级 `TZ=UTC` 环境变量造成的 8 小时偏差
@@ -246,15 +246,15 @@ ZCode 3.14.3 起官方恢复了标题自动生成（`generateTitleCandidate` 独
 
 | 官方函数（3.16.3） | 作用 | v9 改造 |
 | --- | --- | --- |
-| `y4a`（system prompt） | 标题生成提示词 | 替换为六类中文提示词，全角括号后不加空格 |
-| `S4a`（cleanGeneratedTitle） | 标题清洗 | 换为 v7 解析器：半角括号归一、未知类型映射六类、吞掉括号后空格 |
+| `y4a`（system prompt） | 标题生成提示词 | 替换为 18 类开发任务中文提示词，全角括号后不加空格 |
+| `S4a`（cleanGeneratedTitle） | 标题清洗 | 换为 v7 解析器：半角括号归一、未知类型按关键词映射到 18 类、吞掉括号后空格 |
 | `b4a` + 调用点 | 构造消息 | 增加可选第二参数作为 system prompt（两阶段摘要通道） |
 | `M4a` 内 `Zkt` 调用 | 标题候选生成 | 输入改为全体用户消息压缩摘要（首 700 + 近 6×220 / 长会话两阶段） |
 | `D4a` 的 `turnNumber!==0` | 仅首轮触发 | 等长注释填充移除，交给冷却逻辑 |
-| `w2n` | 触发守卫 | 每 N 个成功轮次重提炼（`sessionTitleGenerationTurn` 冷却标记，默认 5） |
+| `w2n` | 触发守卫 | 每 N 个成功轮次重提炼（`sessionTitleGenerationTurn` 冷却标记，默认 3） |
 | `N4a` | 持久化 | 标题未变化时跳过写库（避免每次刷新都发 SessionTitleUpdated） |
 
-助手回复永不进入标题模型输入（摘要只取用户消息），规避回答首行被误存为标题的问题——与 v5 相同。`-RefreshTurns` 默认 5，还原脚本按原位逐块反替换，回写后与出厂 `zcode.cjs` 字节一致（已实测 SHA-256 比对）。
+助手回复永不进入标题模型输入（摘要只取用户消息），规避回答首行被误存为标题的问题——与 v5 相同。`-RefreshTurns` 默认 3，还原脚本按原位逐块反替换，回写后与出厂 `zcode.cjs` 字节一致（已实测 SHA-256 比对）。已打过 v9 的文件重跑补丁时，若命令行/交互给出的 N 与已固化值不同，脚本只更新冷却块内的轮次值，不动提示词与清洗器。
 
 ### 标题持续重提炼（已整合进 v6，3.14.1）
 
@@ -265,7 +265,7 @@ ZCode 3.14.3 起官方恢复了标题自动生成（`generateTitleCandidate` 独
 - 仍然使用 v6 的“会话整体用户消息”作为标题输入；
 - `Oba` 在新标题与当前标题完全相同时跳过写回，减少标题抖动；
 - `titleSource=custom` 永不覆盖；失败/取消仍在下一成功轮次立即重试；
-- `RefreshTurns` 默认 5；`-RefreshTurns 1` 表示每个成功轮次都重提炼。
+- `RefreshTurns` 默认 3；`-RefreshTurns 1` 表示每个成功轮次都重提炼。统一工具箱勾选 `[2]` 时会像纱浓度一样交互询问 N（命令行传 `-RefreshTurns` 则跳过询问）。
 
 使用方式：
 
@@ -483,7 +483,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-font.bat` / `restore-zcode-font.ps1` | 字体还原入口 |
 | `patch-zcode-title.bat` / `patch-zcode-title.ps1` | 标题自动生成修复补丁入口（3.12.3 专用） |
 | `restore-zcode-title.bat` / `restore-zcode-title.ps1` | 标题补丁还原入口 |
-| `patch-zcode-title-lastturn.bat` / `.ps1` | 标题六类前缀+持续重提炼入口（3.16.3，v9；`-RefreshTurns` 默认 5） |
+| `patch-zcode-title-lastturn.bat` / `.ps1` | 标题类型前缀+持续重提炼入口（3.16.3，v9；`-RefreshTurns` 默认 3） |
 | `restore-zcode-title-lastturn.bat` / `.ps1` | 标题六类前缀+持续重提炼还原入口 |
 | `patch-zcode-wallpaper.bat` / `patch-zcode-wallpaper.ps1` | 桌面壁纸补丁入口（含选图菜单与纱浓度调节） |
 | `restore-zcode-wallpaper.bat` / `restore-zcode-wallpaper.ps1` | 壁纸还原入口 |
