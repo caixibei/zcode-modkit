@@ -252,9 +252,11 @@ ZCode 3.14.3 起官方恢复了标题自动生成（`generateTitleCandidate` 独
 | `M4a` 内 `Zkt` 调用 | 标题候选生成 | 输入改为全体用户消息压缩摘要（首 700 + 近 6×220 / 长会话两阶段） |
 | `D4a` 的 `turnNumber!==0` | 仅首轮触发 | 等长注释填充移除，交给冷却逻辑 |
 | `w2n` | 触发守卫 | 每 N 个成功轮次重提炼（`sessionTitleGenerationTurn` 冷却标记，默认 3） |
+| `Qkt` 调用点的 `deferIfProviderRuntimeHeadersRefresh` | 3.16.3 新增：把内联标题尝试推迟到 runtime headers 刷新之后 | 改为 `!1`，恢复 3.14.1 的内联尝试。两个官方 `shouldRefreshBeforeModelRequest` 实现都恒返回 `true`，而 `w2n` 在推迟标志为真且需刷新时直接 `return false`，等于每次 turn 都跳过内联生成、完全依赖 turn 末尾的 `DBo` 兜底；实测 3.16.3 重启后连续 20+ 分钟活跃会话**一条 `session_title` 请求都没发出**（不是失败，是根本不发起）。清掉标志后由 `v4a` 自带的 `refreshRuntimeHeadersBeforeAttempt` 在真正请求前按需刷新 |
+| `v4a` 的 `bind`（auxiliary 模型参数） | 官方 `PP()` 固定 `reasoningLevel.values[0]`（low） | 保持官方 low 档，仅保留 5e3 输出上限。历史改造曾改为传会话档位（max），实测用量表 `variant=max` 为 **0 成功 / 2 失败**，失败均在 ~1ms 内结束且无 provider status code（网关在非流式标题请求上直接断开）；low 为 110 成功 / 13 失败、disabled 为 22 / 1，low 才是长期可用的配置 |
 | `N4a` | 持久化 | 标题未变化时跳过写库（避免每次刷新都发 SessionTitleUpdated） |
 
-助手回复永不进入标题模型输入（摘要只取用户消息），规避回答首行被误存为标题的问题——与 v5 相同。`-RefreshTurns` 默认 3，还原脚本按原位逐块反替换，回写后与出厂 `zcode.cjs` 字节一致（已实测 SHA-256 比对）。已打过 v9 的文件重跑补丁时，若命令行/交互给出的 N 与已固化值不同，脚本只更新冷却块内的轮次值，不动提示词与清洗器。
+助手回复永不进入标题模型输入（摘要只取用户消息），规避回答首行被误存为标题的问题——与 v5 相同。`-RefreshTurns` 默认 3，还原脚本按原位逐块反替换，回写后与出厂 `zcode.cjs` 字节一致（已实测 SHA-256 比对）。已打过旧版 v9 的文件重跑补丁时，脚本比对冷却轮次、提示词代次、档位绑定形态与推迟标志，任一项与本脚本不符就先原位还原、再整体重打（其他补丁不受影响），因此重跑一次即可把安装目录升级到当前形态。
 
 ### 标题持续重提炼（已整合进 v6，3.14.1）
 

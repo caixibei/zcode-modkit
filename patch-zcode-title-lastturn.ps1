@@ -123,9 +123,14 @@ $v9S4a = $v9S4a.TrimEnd("`r","`n")
 # official message builder + its call site
 $officialB4a  = 'function b4a(e){return[{role:"system",content:y4a},{role:"user",content:jwe(e)}]}'
 $officialB4aCall = 'h=b4a(e),_=this.createEvent'
-# v9: optional second arg carries the first-stage prompt as the system message
-$v9B4a = 'function b4a(e,p){let i=p||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
-$v9B4aCall = 'h=b4a(e,t),_=this.createEvent'
+# v9: optional second arg carries the first-stage prompt as the system message.
+# The call site must pass t.prompt (a string), never the whole options object:
+# an earlier revision passed `t`, so content became an object and the AI SDK
+# provider threw "TypeError: e.map is not a function" on every title request
+# (~1ms, no status code). The typeof guard keeps the system message a string
+# even if a future call site passes the options object again.
+$v9B4a = 'function b4a(e,p){let i=(typeof p=="string"&&p)||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
+$v9B4aCall = 'h=b4a(e,t.prompt),_=this.createEvent'
 
 # official guard tail in D4a (turnNumber gate) - equal-length filler swap
 $officialTurnGuard = '||e.turnNumber!==0'
@@ -142,18 +147,52 @@ $officialZkt = 'let c=await Zkt.call(this,e,{causation:o.causation,modelContext:
 
 # auxiliary-model reasoning level: official PP() (auxiliaryModelOptions) pins
 # reasoningLevel to optionSpecs.reasoningLevel.values[0] ("low" for many
-# providers). On magpie/volcengine/GLM-5.3-Flash every low-level title request
-# fails ("Model request failed", 21/21 in observed usage data) while the
-# session's own max-level requests succeed (35/35). The title bind call inside
-# v4a is therefore patched to pass the SESSION's current reasoning level
-# (fallback: the official values[0] when the session selection has none).
-# maxOutputTokens is raised 5e3 -> 2e4: at max reasoning level the model's
-# thinking can exhaust a 5000-token output budget before emitting the title,
-# which the provider reports as a request failure (observed on long sessions).
-# Anchor verified unique.
+# providers). Passing the SESSION's level instead (max on GLM/volcengine) was
+# tried in an earlier revision and failed on every attempt: usage rows show
+# variant=max 0 completed / 2 error, while low is 110 completed / 13 error and
+# disabled is 22 / 1. The failing max attempts die in ~1ms with no provider
+# status code, i.e. the gateway aborts the non-streaming title call before a
+# response exists. Keep the official values[0] level and the official 5e3
+# output budget - a one-sentence title never needs more, and low-level
+# generation is the only configuration with a long success history.
 $officialBind = 'a=i.bind(PP(i)),c=A0(o)'
 $reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
-$v9Bind = 'a=i.bind({reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(2e4,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)' + $reasoningMarker
+$v9Bind = 'a=i.bind({reasoningLevel:i.optionSpecs.reasoningLevel.values[0],maxOutputTokens:Math.min(5e3,i.optionSpecs.maxOutputTokens.max)}),c=A0(o)' + $reasoningMarker
+
+# 3.16.3 defers every inline title attempt behind provider runtime headers:
+# Qkt is called with deferIfProviderRuntimeHeadersRefresh:!0 and w2n returns
+# false whenever shouldRefreshBeforeModelRequest() is true. Both shipped
+# providers hand back true unconditionally, so the inline attempt is *always*
+# skipped and generation depends entirely on the DBo fallback at turn end.
+# After the 3.16.3 relaunch that fallback stopped firing: 20+ minutes of active
+# turns produced zero session_title usage rows (no request at all, not a failed
+# request). 3.14.1 had no such gate. Clear the flag so the attempt runs inline;
+# v4a's own refreshRuntimeHeadersBeforeAttempt hook still refreshes headers on
+# demand before the actual request.
+$deferOfficial = 'deferIfProviderRuntimeHeadersRefresh:!0'
+$noDeferMarker = '/*ZCODE-TITLE-NODEFER*/'
+$deferNew = 'deferIfProviderRuntimeHeadersRefresh:!1' + $noDeferMarker
+
+# failure diagnostics: the title request fails with "Model request failed." and
+# no provider status code, while the equivalent manual request against the same
+# gateway returns 200. The official error path swallows the underlying cause, so
+# every rejection appends one metadata line to %TEMP%\zcode-title-diag.log
+# (error name/message/code/statusCode/responseBody/cause - no prompt content).
+# Used to pin down the real cause; harmless to keep enabled.
+$officialGenTextCatch = 'R=await U_(I,()=>a.generateText({abortSignal:S,messages:h,tools:[]})).catch(async z=>{'
+$diagMarker = '/*ZCODE-TITLE-DIAG*/'
+$diagBody = 'try{let _td=require("node:fs"),_tp=require("node:path");_td.appendFileSync(_tp.join(require("node:os").tmpdir(),"zcode-title-diag.log"),new Date().toISOString()+" "+(()=>{try{return JSON.stringify({name:z&&z.name,msg:z&&z.message,code:z&&z.code,statusCode:z&&z.statusCode,status:z&&z.status,responseBody:z&&z.responseBody,cause:z&&z.cause?String(z.cause):void 0,url:z&&z.url})}catch(_e){return String(z)}})()+"\n")}catch{}'
+$v9GenTextCatch = $officialGenTextCatch + $diagMarker + $diagBody
+
+# short-input guard: D4a requires the CURRENT input to be >= R4a (10) chars
+# before any title attempt. v9 builds the title from the whole session digest,
+# so a short turn ("好的，明白了") is still a valid refresh trigger; with the
+# gate in place a refresh turn can silently do nothing and the cadence looks
+# broken. Lower it to 1 - the preceding length===0 test still rejects empty
+# input, and the digest path never uses the short text itself.
+$officialShortGuard = 'R4a=10;r(Qkt'
+$shortGuardMarker = '/*ZCODE-TITLE-SHORT*/'
+$shortGuardNew = 'R4a=1;r(Qkt' + $shortGuardMarker
 
 # cooldown/refresh markers
 $refreshPrefix = '/*ZCODE-TITLE-REFRESH:'
@@ -284,8 +323,18 @@ if ($isV9 -and $hasRefresh) {
     # 18-type prompt contains the escapes for 重构 (\u91CD\u6784); the six-type one does not
     $isCurrentPrompt = ((Count-Str $text ('\u91CD\u6784')) -ge 1)
     $hasLevel = ((Count-Str $text $reasoningMarker) -gt 0)
-    if ($oldN -eq $RefreshTurns -and $hasRetry -and $isCurrentPrompt -and $hasLevel) {
-        Write-Host '[1/4] v9 title patch already present (18 types, retry, session-level reasoning, same cadence); nothing to patch.'
+    $hasNoDefer = ((Count-Str $text $noDeferMarker) -gt 0)
+    $hasDiag    = ((Count-Str $text $diagMarker) -gt 0)
+    $hasShort   = ((Count-Str $text $shortGuardMarker) -gt 0)
+    # A revision that still passes the session reasoning level must be rebuilt:
+    # the bind expression differs from the current values[0] form even though
+    # the marker is present.
+    $isCurrentBind = ((Count-Str $text $v9Bind) -ge 1)
+    # A revision that still passes the whole options object to b4a must be
+    # rebuilt as well: its system message is an object, not a string.
+    $isCurrentB4a = ((Count-Str $text $v9B4a) -ge 1 -and (Count-Str $text $v9B4aCall) -ge 1)
+    if ($oldN -eq $RefreshTurns -and $hasRetry -and $isCurrentPrompt -and $hasLevel -and $isCurrentBind -and $hasNoDefer -and $hasDiag -and $isCurrentB4a -and $hasShort) {
+        Write-Host '[1/4] v9 title patch already present (18 types, retry, official low-level bind, inline attempt, failure diagnostics, string system prompt, short-input guard lowered, same cadence); nothing to patch.'
         if ($NoRestart) {
             Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
         } elseif ($zcodeExe) {
@@ -296,7 +345,7 @@ if ($isV9 -and $hasRefresh) {
         }
         exit 0
     }
-    Write-Host "[1/4] v9 present (cadence $oldN, retry=$hasRetry, 18types=$isCurrentPrompt, level=$hasLevel); rebuilding in place."
+    Write-Host "[1/4] v9 present (cadence $oldN, retry=$hasRetry, 18types=$isCurrentPrompt, level=$hasLevel, bind=$isCurrentBind, noDefer=$hasNoDefer, diag=$hasDiag, b4a=$isCurrentB4a, short=$hasShort); rebuilding in place."
     $restoreScript = Join-Path $PSScriptRoot 'restore-zcode-title-lastturn.ps1'
     $restoreArgs = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $restoreScript, '-NoRestart', '-BackupDir', $BackupDir)
     if ($TargetCjs) { $restoreArgs += @('-TargetCjs', $TargetCjs) }
@@ -412,9 +461,21 @@ $patched = $patched.Replace($officialOba, $refreshObaNew)
 if ((Count-Str $patched $officialM4aCatch) -ne 1) { throw 'M4a catch anchor not unique; refusing.' }
 $patched = $patched.Replace($officialM4aCatch, $v9M4aCatch)
 
-# 3i) session-level reasoning for the title model (official PP pins values[0]=low)
+# 3i) title model bind: official values[0] reasoning level + official 5e3 budget
 if ((Count-Str $patched $officialBind) -ne 1) { throw 'title bind anchor not unique; refusing.' }
 $patched = $patched.Replace($officialBind, $v9Bind)
+
+# 3j) clear the 3.16.3 inline-attempt defer flag (see $deferOfficial note)
+if ((Count-Str $patched $deferOfficial) -ne 1) { throw 'title defer anchor not unique; refusing.' }
+$patched = $patched.Replace($deferOfficial, $deferNew)
+
+# 3k) append failure diagnostics on the title generation rejection path
+if ((Count-Str $patched $officialGenTextCatch) -ne 1) { throw 'title generateText catch anchor not unique; refusing.' }
+$patched = $patched.Replace($officialGenTextCatch, $v9GenTextCatch)
+
+# 3l) lower the short-input guard (see $officialShortGuard note)
+if ((Count-Str $patched $officialShortGuard) -ne 1) { throw 'title short-input guard anchor not unique; refusing.' }
+$patched = $patched.Replace($officialShortGuard, $shortGuardNew)
 
 # 4) post-conditions + syntax gate
 if ((Count-Str $patched $v9Marker) -ne 2) { throw 'v9 markers missing or duplicated after patch.' }
@@ -425,6 +486,10 @@ if ((Count-Str $patched $overallMarker) -ne 1) { throw 'overall digest marker mi
 if ((Count-Str $patched $v9Zkt) -ne 1) { throw 'two-stage Zkt call missing.' }
 if ((Count-Str $patched $retryMarker) -ne 1) { throw 'failure retry marker missing.' }
 if ((Count-Str $patched $reasoningMarker) -ne 1) { throw 'reasoning-level marker missing.' }
+if ((Count-Str $patched $noDeferMarker) -ne 1) { throw 'inline-attempt defer marker missing.' }
+if ((Count-Str $patched $diagMarker) -ne 1) { throw 'title failure diagnostics marker missing.' }
+if ((Count-Str $patched $shortGuardMarker) -ne 1) { throw 'title short-input guard marker missing.' }
+if ((Count-Str $patched $deferOfficial) -ne 0) { throw 'inline-attempt defer flag still present after patch.' }
 if ((Count-Str $patched $officialPrompt) -ne 0) { throw 'official prompt still present after patch.' }
 if ((Count-Str $patched $officialS4aHead) -ne 0) { throw 'official S4a still present after patch.' }
 if ((Count-Str $patched $officialTurnGuard) -ne 0) { throw 'turn guard still present after patch.' }

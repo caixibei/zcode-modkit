@@ -215,12 +215,24 @@ if (-not $ms.Success) { throw 'v9 S4a block not found; refusing.' }
 # the two functions, so strip exactly the next function's head)
 $v9S4a = $ms.Value.Substring(0, $ms.Value.Length - 'function w4a'.Length)
 
-$mb = [regex]::Match($text, [regex]::Escape('function b4a(e,p){let i=p||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'))
-if (-not $mb.Success) { throw 'v9 b4a block not found; refusing.' }
-$v9B4a = $mb.Value
-$mbc = [regex]::Match($text, [regex]::Escape('h=b4a(e,t),_=this.createEvent'))
-if (-not $mbc.Success) { throw 'v9 b4a call not found; refusing.' }
-$v9B4aCall = $mbc.Value
+# b4a carries the first-stage prompt as the system message. Two historical
+# shapes exist: the broken one passes the whole options object (system content
+# becomes an object -> "TypeError: e.map is not a function") and the fixed one
+# passes t.prompt with a typeof guard. Reverse whichever is present.
+$v9B4aOld = 'function b4a(e,p){let i=p||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
+$v9B4aNew = 'function b4a(e,p){let i=(typeof p=="string"&&p)||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
+$v9B4aCallOld = 'h=b4a(e,t),_=this.createEvent'
+$v9B4aCallNew = 'h=b4a(e,t.prompt),_=this.createEvent'
+$v9B4a = $null
+$v9B4aCall = $null
+foreach ($cand in @($v9B4aNew, $v9B4aOld)) {
+    if ((Count-Str $text $cand) -eq 1) { $v9B4a = $cand; break }
+}
+if (-not $v9B4a) { throw 'v9 b4a block not found; refusing.' }
+foreach ($cand in @($v9B4aCallNew, $v9B4aCallOld)) {
+    if ((Count-Str $text $cand) -eq 1) { $v9B4aCall = $cand; break }
+}
+if (-not $v9B4aCall) { throw 'v9 b4a call not found; refusing.' }
 
 $mz = [regex]::Match($text, '(?s)let c=await Zkt\.call\(this,/\*ZCODE-TITLE-OVERALL\*/.*?\),\{causation:o\.causation,modelContext:o\.modelContext,messageID:t,querySource:v2n,traceContext:n\}\)')
 if (-not $mz.Success) { throw 'v9 Zkt block not found; refusing.' }
@@ -238,13 +250,45 @@ $v9M4aCatch = '.catch(async a=>{' + $retryMarker + 'this.sessionTitleGenerationA
 if ((Count-Str $text $v9M4aCatch) -gt 0) {
     $text = $text.Replace($v9M4aCatch, $officialM4aCatch)
 }
-# session-level reasoning (/*ZCODE-TITLE-LEVEL*/): restore the official PP() bind call
+# title-model bind (/*ZCODE-TITLE-LEVEL*/): restore the official PP() bind call.
+# Historical revisions used two shapes:
+#   session-level: reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0]
+#   pinned-level:  reasoningLevel:i.optionSpecs.reasoningLevel.values[0]
+# Both share the same tail after the level expression; tolerate either prefix
+# and any historical maxOutputTokens cap (5e3 / 2e4, ...).
 $reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
 $officialBind = 'a=i.bind(PP(i)),c=A0(o)'
-# tolerate any historical maxOutputTokens cap (5e3 / 2e4, ...) in the bind call
-$mvl = [regex]::Match($text, 'a=i\.bind\(\{reasoningLevel:o\?\.options\?\.reasoningLevel\?\?i\.optionSpecs\.reasoningLevel\.values\[0\],maxOutputTokens:Math\.min\([0-9e]+,i\.optionSpecs\.maxOutputTokens\.max\)\}\),c=A0\(o\)' + [regex]::Escape($reasoningMarker))
+$mvl = [regex]::Match($text, 'a=i\.bind\(\{reasoningLevel:(?:o\?\.options\?\.reasoningLevel\?\?)?i\.optionSpecs\.reasoningLevel\.values\[0\],maxOutputTokens:Math\.min\([0-9e]+,i\.optionSpecs\.maxOutputTokens\.max\)\}\),c=A0\(o\)' + [regex]::Escape($reasoningMarker))
 if ($mvl.Success) {
     $text = $text.Replace($mvl.Value, $officialBind)
+}
+# inline-attempt defer (/*ZCODE-TITLE-NODEFER*/): restore the official flag
+$noDeferMarker = '/*ZCODE-TITLE-NODEFER*/'
+$deferOfficial = 'deferIfProviderRuntimeHeadersRefresh:!0'
+$deferNew = 'deferIfProviderRuntimeHeadersRefresh:!1' + $noDeferMarker
+if ((Count-Str $text $deferNew) -gt 0) {
+    $text = $text.Replace($deferNew, $deferOfficial)
+}
+# failure diagnostics (/*ZCODE-TITLE-DIAG*/): drop the appended log statement
+$diagMarker = '/*ZCODE-TITLE-DIAG*/'
+$officialGenTextCatch = 'R=await U_(I,()=>a.generateText({abortSignal:S,messages:h,tools:[]})).catch(async z=>{'
+if ((Count-Str $text $officialGenTextCatch) -gt 0) {
+    $di = $text.IndexOf($officialGenTextCatch)
+    if ($di -ge 0) {
+        $after = $text.Substring($di + $officialGenTextCatch.Length)
+        if ($after.StartsWith($diagMarker)) {
+            $tailStart = $after.IndexOf('catch{}', $diagMarker.Length)
+            if ($tailStart -lt 0) { throw 'title diagnostics block has no terminator; refusing.' }
+            $text = $text.Substring(0, $di + $officialGenTextCatch.Length) + $after.Substring($tailStart + 7)
+        }
+    }
+}
+# short-input guard (/*ZCODE-TITLE-SHORT*/): restore the official threshold
+$shortGuardMarker = '/*ZCODE-TITLE-SHORT*/'
+$shortGuardOld = 'R4a=1;r(Qkt' + $shortGuardMarker
+$officialShortGuard = 'R4a=10;r(Qkt'
+if ((Count-Str $text $shortGuardOld) -gt 0) {
+    $text = $text.Replace($shortGuardOld, $officialShortGuard)
 }
 # the filler replaced "||e.turnNumber!==0" inside D4a; restore that exact tail
 $text = $text.Replace($turnGuardFiller + $turnGuardCtx, $officialTurnGuard + $turnGuardCtx)
@@ -261,6 +305,9 @@ if ((Count-Str $text $refreshPrefix) -ne 0) { throw 'refresh marker still presen
 if ((Count-Str $text $refreshSameMarker) -ne 0) { throw 'same-title marker still present after reverse; refusing.' }
 if ((Count-Str $text $retryMarker) -ne 0) { throw 'retry marker still present after reverse; refusing.' }
 if ((Count-Str $text $reasoningMarker) -ne 0) { throw 'reasoning-level marker still present after reverse; refusing.' }
+if ((Count-Str $text $noDeferMarker) -ne 0) { throw 'inline-attempt defer marker still present after reverse; refusing.' }
+if ((Count-Str $text $diagMarker) -ne 0) { throw 'title diagnostics marker still present after reverse; refusing.' }
+if ((Count-Str $text $shortGuardMarker) -ne 0) { throw 'short-input guard marker still present after reverse; refusing.' }
 if ((Count-Str $text $officialPrompt) -ne 1) { throw 'official prompt not restored.' }
 if ((Count-Str $text $officialS4a) -ne 1) { throw 'official S4a not restored.' }
 if ((Count-Str $text $officialB4a) -ne 1) { throw 'official b4a not restored.' }
