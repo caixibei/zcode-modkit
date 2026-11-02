@@ -464,7 +464,7 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 | 更新小窗（`windowKind=update-status`） | **不播**（同一入口页，脚本内显式排除） |
 | 自动播放策略 | 先静音播放（Chromium 必然放行），随后尝试取消静音；若系统不允许有声自动播放，静默回退为静音继续播 |
 
-**片源**：把片头视频放进工具包目录的 `boot-animation/`（支持 `.mp4` / `.webm` / `.mov`，单文件上限 12 MB）。脚本按文件名排序取第一个，也可用 `-Clip <文件名或去扩展名>` 指定。仓库自带 `deepseek-brand-intro.mp4`（1280×720、7 秒、1.25 MB）作为默认片源；换成自己的片子后重跑补丁即可。
+**片源**：把片头视频放进工具包目录的 `boot-animation/`（支持 `.mp4` / `.webm` / `.mov`，单文件上限 12 MB）。目录里只有一个视频时直接使用；有多个时脚本会列出带编号和文件大小的清单让你选（直接回车默认第 1 个，输入 `q` 取消且不改动任何文件）；自动化场景可用 `-Clip <完整文件名或去扩展名>` 跳过选择。仓库自带 `deepseek-brand-intro.mp4`（1280×720、7 秒、1.25 MB）作为默认片源；换成自己的片子后重跑补丁即可。
 
 **打补丁 / 换片**
 
@@ -555,7 +555,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-usage.bat` / `restore-zcode-usage.ps1` | 用量清理还原入口（优先原位反替换，兼容同文件其他补丁） |
 | `patch-zcode-wallpaper-gear.bat` / `patch-zcode-wallpaper-gear.ps1` | 挡位壁纸补丁入口（思考级别联动换图，含纱浓度调节） |
 | `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
-| `patch-zcode-boot-animation.bat` / `patch-zcode-boot-animation.ps1` | 开机动画补丁入口（内嵌 `boot-animation/` 内首个视频，支持 `-Clip` 指定） |
+| `patch-zcode-boot-animation.bat` / `patch-zcode-boot-animation.ps1` | 开机动画补丁入口（内嵌 `boot-animation/` 内视频；多个文件时交互选择，`-Clip` 可跳过） |
 | `restore-zcode-boot-animation.bat` / `restore-zcode-boot-animation.ps1` | 开机动画还原入口（只剥自己的 HTML 块，其它补丁保留） |
 | `boot-animation/*.mp4` | 开机动画片源（自带 `deepseek-brand-intro.mp4`；换成自己的视频后重跑补丁即可，单文件 ≤12 MB） |
 | `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … M4 最高挡；「关闭思考」不配图），见第七章映射表 |

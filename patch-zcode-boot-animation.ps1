@@ -13,11 +13,12 @@
 # - The update-status window (windowKind=update-status) loads the SAME index.html.
 #   The injected script exits early there, so the small updater window never
 #   shows the intro.
-# - Video source: the first video in .\boot-animation\ (sorted by name; .mp4,
-#   .webm or .mov), embedded as a data: URI inside index.html. Nothing is read
-#   from disk at runtime, so the patch keeps working after the toolkit folder
-#   moves or is deleted. To change the intro, drop another clip in that folder
-#   (or pass -Clip <name>) and re-run this script.
+# - Video source: a video in .\boot-animation\ (.mp4, .webm or .mov), embedded
+#   as a data: URI inside index.html. One clip is used directly; several clips
+#   open an interactive numbered picker; -Clip <full name or stem> skips the
+#   prompt for automation. Nothing is read from disk at runtime, so the patch
+#   keeps working after the toolkit folder moves or is deleted. To change the
+#   intro, drop another clip in that folder and re-run this script.
 # - Playback rules (mirrors dsh-boot-animation's decidePlay contract):
 #     * one play per renderer session -> sessionStorage flag; an F5 reload in the
 #       same window does NOT replay, closing the window does clear it
@@ -39,7 +40,7 @@
 param(
     [switch]$NoRestart,   # toolbox mode: do not relaunch ZCode after patching
     [string]$TargetAsar,  # advanced/testing: operate on this app.asar instead of the auto-located one (skips the running check)
-    [string]$Clip         # optional: file name (or stem) inside .\boot-animation\ to use
+    [string]$Clip         # optional: exact file name (or stem) in .\boot-animation\; skips the interactive picker
 )
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
@@ -342,7 +343,44 @@ function Select-Clip([string]$clipDir, [string]$want) {
         if (-not $hit) { throw "clip '$want' not found in $clipDir (available: $(($clips | ForEach-Object { $_.Name }) -join ', '))" }
         return $hit
     }
-    return $clips[0]
+    if ($clips.Count -eq 1) { return $clips[0] }
+
+    # several clips and no -Clip: ask instead of guessing by name order
+    if ([Console]::IsInputRedirected) {
+        Write-Host ("[!] {0} clips found but input is not interactive; using the first one: {1}" -f $clips.Count, $clips[0].Name) -ForegroundColor Yellow
+        Write-Host '    Pass -Clip <full name> to choose deterministically in automation.' -ForegroundColor Yellow
+        return $clips[0]
+    }
+
+    Write-Host ''
+    Write-Host ("[?] {0} intro clips found in {1}" -f $clips.Count, $clipDir) -ForegroundColor Cyan
+    for ($i = 0; $i -lt $clips.Count; $i++) {
+        $c = $clips[$i]
+        $size = '{0:N2} MiB' -f ($c.Length / 1MB)
+        $cap = ''
+        if ($c.Length -gt $script:maxClipBytes) { $cap = '  [over the 12 MiB cap]' }
+        Write-Host ("    [{0}] {1}  ({2}, {3}){4}" -f ($i + 1), $c.Name, $size, $c.Extension.TrimStart('.'), $cap)
+    }
+    Write-Host '    Enter = use [1]; or type a number, a full file name, or a name without extension; q = cancel.'
+
+    while ($true) {
+        $answer = (Read-Host 'Choose the intro clip').Trim()
+        if ($answer -eq '') { return $clips[0] }
+        if ($answer -ieq 'q') {
+            Write-Host '[i] Cancelled. Nothing was changed.' -ForegroundColor Yellow
+            if (-not $NoRestart) { Read-Host 'Press Enter to exit' }
+            exit 0
+        }
+        if ($answer -match '^\d+$') {
+            $n = [int]$answer
+            if ($n -ge 1 -and $n -le $clips.Count) { return $clips[$n - 1] }
+            Write-Host ("    [!] pick a number between 1 and {0}." -f $clips.Count) -ForegroundColor Yellow
+            continue
+        }
+        $hit = $clips | Where-Object { $_.Name -ieq $answer -or $_.BaseName -ieq $answer } | Select-Object -First 1
+        if ($hit) { return $hit }
+        Write-Host '    [!] no match; type a listed number, the full file name, or the name without extension.' -ForegroundColor Yellow
+    }
 }
 
 function Get-ClipMime([string]$ext) {
