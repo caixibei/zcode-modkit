@@ -27,7 +27,10 @@
 #     * muted autoplay first (Chromium always allows that), then a best-effort
 #       unmute; if unmuting pauses the element it silently reverts to muted
 #     * never blocks or breaks the app: 'ended', 'error' or a 25 s stall all end
-#       in the same fade-out-and-remove path
+#       in the same fade-out-and-remove path; a natural end holds the last frame
+#       for 240 ms then dissolves over 0.8 s with a 3% push-in, while a skip
+#       (click, Esc, error, stall) fades in 0.4 s; the overlay gives up pointer
+#       events as soon as the fade starts so the UI is usable immediately
 # - app.asar is FULLY REBUILT (same technique as patch-zcode-wallpaper.ps1):
 #   every other file stays byte-identical and in order; only index.html grows and
 #   the header offsets are recomputed. Integrity fields of untouched files are
@@ -70,9 +73,13 @@ $script:maxClipBytes = 12MB
 $script:blockTemplate = @'
 <!-- ZCODE-BOOT-ANIMATION-BEGIN -->
 <style>
-#zcode-boot-animation{position:fixed;inset:0;z-index:2147483647;background:#000;display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .45s ease;cursor:pointer}
-#zcode-boot-animation.zba-fade{opacity:0}
-#zcode-boot-animation video{width:100%;height:100%;object-fit:cover;display:block;background:#000}
+#zcode-boot-animation{position:fixed;inset:0;z-index:2147483647;background:#000;display:flex;align-items:center;justify-content:center;opacity:1;transition:opacity .8s cubic-bezier(.22,.61,.36,1);will-change:opacity;cursor:pointer}
+#zcode-boot-animation.zba-fade{opacity:0;pointer-events:none}
+#zcode-boot-animation video{width:100%;height:100%;object-fit:cover;display:block;background:#000;transform:scale(1);transition:transform 1s cubic-bezier(.22,.61,.36,1);will-change:transform}
+#zcode-boot-animation.zba-fade video{transform:scale(1.03)}
+#zcode-boot-animation.zba-quick{transition-duration:.4s}
+#zcode-boot-animation.zba-quick video{transition:none;transform:none}
+@media (prefers-reduced-motion:reduce){#zcode-boot-animation,#zcode-boot-animation.zba-quick{transition-duration:.28s}#zcode-boot-animation.zba-fade video{transition:none;transform:none}}
 #zcode-boot-animation .zba-skip{position:absolute;right:28px;bottom:24px;padding:6px 14px;border-radius:999px;font:500 13px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif;color:rgba(255,255,255,.86);background:rgba(0,0,0,.38);border:1px solid rgba(255,255,255,.22);pointer-events:none;user-select:none}
 </style>
 <div id="zcode-boot-animation" role="presentation">
@@ -91,24 +98,41 @@ $script:blockTemplate = @'
   var KEY = 'zcode-boot-animation:played';
   try { if (sessionStorage.getItem(KEY) === '1') { el.remove(); return; } } catch (e) {}
   var finished = false;
-  function done() {
+  var reduce = false;
+  try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+  var FADE = reduce ? 280 : 800;
+  var HOLD = reduce ? 0 : 240;
+  var QUICK = reduce ? 280 : 400;
+  function release() {
+    el.remove();
+    // drop the decoder only after the overlay is gone: clearing src while the
+    // last frame is still on screen flashes black and reads as a hard cut
+    try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
+  }
+  function fadeOut(quick) {
+    if (quick) el.classList.add('zba-quick');
+    el.classList.add('zba-fade');
+    setTimeout(release, (quick ? QUICK : FADE) + 120);
+  }
+  function done(quick) {
     if (finished) return;
     finished = true;
     try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
-    try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {}
-    el.classList.add('zba-fade');
-    setTimeout(function () { el.remove(); }, 500);
+    // pause, but keep the current frame painted during the hand-off
+    try { v.pause(); } catch (e) {}
+    if (quick) { fadeOut(true); return; }
+    setTimeout(function () { fadeOut(false); }, HOLD);
   }
-  el.addEventListener('click', done);
+  el.addEventListener('click', function () { done(true); });
   document.addEventListener('keydown', function (ev) {
-    if (ev.key === 'Escape' || ev.keyCode === 27) done();
+    if (ev.key === 'Escape' || ev.keyCode === 27) done(true);
   });
-  var stall = setTimeout(done, 25000);
-  v.addEventListener('ended', function () { clearTimeout(stall); done(); });
-  v.addEventListener('error', function () { clearTimeout(stall); done(); });
+  var stall = setTimeout(function () { done(true); }, 25000);
+  v.addEventListener('ended', function () { clearTimeout(stall); done(false); });
+  v.addEventListener('error', function () { clearTimeout(stall); done(true); });
   function start() {
     var p;
-    try { p = v.play(); } catch (e) { done(); return; }
+    try { p = v.play(); } catch (e) { done(true); return; }
     if (!p || typeof p.then !== 'function') return;
     p.then(function () {
       try {
@@ -117,7 +141,7 @@ $script:blockTemplate = @'
           if (v.paused && !finished) { v.muted = true; try { v.play(); } catch (e) {} }
         }, 300);
       } catch (e) { try { v.muted = true; } catch (e2) {} }
-    }, function () { done(); });
+    }, function () { done(true); });
   }
   function whenReady() {
     var fired = false;
