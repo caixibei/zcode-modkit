@@ -30,13 +30,15 @@ $tasks = @(
     [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
     [pscustomobject]@{ Id = '6'; Kind = 'patch';   Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
     [pscustomobject]@{ Id = '7'; Kind = 'patch';   Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
+    [pscustomobject]@{ Id = '8'; Kind = 'patch';   Label = 'boot animation (intro video on launch)'; Script = 'patch-zcode-boot-animation.ps1' },
     [pscustomobject]@{ Id = '9'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },
     [pscustomobject]@{ Id = '10'; Kind = 'restore'; Label = 'restore title prefix + refresh'; Script = 'restore-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '11'; Kind = 'restore'; Label = 'restore wallpaper';       Script = 'restore-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '12'; Kind = 'restore'; Label = 're-enable update checks'; Script = 'restore-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '13'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },
     [pscustomobject]@{ Id = '14'; Kind = 'restore'; Label = 'restore 30d usage prune'; Script = 'restore-zcode-usage.ps1' },
-    [pscustomobject]@{ Id = '15'; Kind = 'restore'; Label = 'restore gear wallpaper';  Script = 'restore-zcode-wallpaper-gear.ps1' }
+    [pscustomobject]@{ Id = '15'; Kind = 'restore'; Label = 'restore gear wallpaper';  Script = 'restore-zcode-wallpaper-gear.ps1' },
+    [pscustomobject]@{ Id = '16'; Kind = 'restore'; Label = 'restore boot animation';  Script = 'restore-zcode-boot-animation.ps1' }
 )
 
 function Show-Menu {

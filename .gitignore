@@ -3,6 +3,7 @@ zcode.cjs.title-backup
 app.asar.wallpaper-backup
 app.asar.updates-backup
 app.asar.gwp-backup
+app.asar.boot-backup
 zcode.cjs.usage-backup
 zcode.cjs.v6-backup
 zcode.cjs.v6-backup.sha256

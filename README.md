@@ -20,7 +20,7 @@
 ![GitHub code size](https://img.shields.io/github/languages/code-size/caixibei/zcode-modkit)
 ![GitHub file count](https://img.shields.io/github/directory-file-count/caixibei/zcode-modkit)
 
-ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.16.3**（上一适配版本 3.14.1 的脚本快照见 GitHub Release `zcode-3.14.1`）：
+ZCode 桌面客户端补丁工具包，包含八个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.16.3**（上一适配版本 3.14.1 的脚本快照见 GitHub Release `zcode-3.14.1`）：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
 2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v9）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
@@ -29,8 +29,9 @@ ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一�
 5. **定时任务时区修复补丁**（`patch-zcode-timezone`）——让 ZCode 的 cron 定时任务按上海时间（UTC+8）触发，修复系统级 `TZ=UTC` 环境变量造成的 8 小时偏差
 6. **用量历史保留补丁**（`patch-zcode-usage`）——停用用量统计的 30 天滚动清理，「累计 Token 数」跨月持续累加不再缩水
 7. **挡位壁纸补丁**（`patch-zcode-wallpaper-gear`）——壁纸跟随输入框「思考级别」自动切换，纯 CSS 实现，切档即时换图（「关闭思考」不配图，M1–M4 覆盖其余全部档位，详见第七章映射表）
+8. **开机动画补丁**（`patch-zcode-boot-animation`）——每次启动 ZCode 播放一段铺满窗口的片头视频，点任意处或按 Esc 跳过，播完自动淡出；片源放 `boot-animation/` 目录（参考 dsh-boot-animation 的播放规则实现，详见第八章）
 
-**统一工具箱**（`zcode-toolbox.bat`）：把 7 个补丁 + 7 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。四个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新）全部基于**当前 asar 原位操作**，打/还原/换图互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v9+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）。
+**统一工具箱**（`zcode-toolbox.bat`）：把 8 个补丁 + 8 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。五个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新 / 开机动画）全部基于**当前 asar 原位操作**，打/还原/换图互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v9+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）。
 
 ---
 
@@ -39,17 +40,17 @@ ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一�
 1. 完全退出 ZCode（托盘图标右键 → Quit）
 2. 双击 `zcode-toolbox.bat`
 3. 在菜单里输入任务编号（可多选，空格或逗号分隔）：
-   - `[1]` 字体补丁 `[2]` 标题修复+持续重提炼 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸
-   - `[9]` 还原字体 `[10]` 还原标题+持续重提炼 `[11]` 还原壁纸 `[12]` 恢复更新检查 `[13]` 还原时区 `[14]` 还原用量清理 `[15]` 还原挡位壁纸
+   - `[1]` 字体补丁 `[2]` 标题修复+持续重提炼 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画
+   - `[9]` 还原字体 `[10]` 还原标题+持续重提炼 `[11]` 还原壁纸 `[12]` 恢复更新检查 `[13]` 还原时区 `[14]` 还原用量清理 `[15]` 还原挡位壁纸 `[16]` 还原开机动画
 4. 确认后按序执行；某任务失败立即停止后续任务（已完成的任务保持其状态），修好后再跑一次即可
 5. 全部成功后自动重启一次 ZCode
 
 单独的 `patch-*-*.bat` / `restore-*-*.bat` 依然可用，行为与工具箱内对应任务一致。
 
-任务编号清单（1–7 为打补丁，9–15 为对应还原；原 [8]/[16] 已整合到 [2]/[10]）：
+任务编号清单（1–8 为打补丁，9–16 为对应还原；原任务 8/16 曾并入标题链路，现开机动画占用这两个编号）：
 
-- 打补丁：`[1]` 字体 `[2]` 标题修复+持续重提炼 `[3]` 壁纸 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸
-- 还原：`[9]` 字体 `[10]` 标题+持续重提炼 `[11]` 壁纸 `[12]` 更新检查 `[13]` 时区 `[14]` 用量清理 `[15]` 挡位壁纸
+- 打补丁：`[1]` 字体 `[2]` 标题修复+持续重提炼 `[3]` 壁纸 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画
+- 还原：`[9]` 字体 `[10]` 标题+持续重提炼 `[11]` 壁纸 `[12]` 更新检查 `[13]` 时区 `[14]` 用量清理 `[15]` 挡位壁纸 `[16]` 开机动画
 
 ### 互不影响保证
 
@@ -60,6 +61,8 @@ ZCode 桌面客户端补丁工具包，包含七个独立补丁与一个统一�
 - 禁更新补丁：在当前 asar 上 25 字节等长替换；还原时优先原位反替换。
 
 挡位壁纸补丁（第七章）与桌面壁纸补丁同为 CSS 追加块，但使用**独立标记**（`ZCODE-GWP-*` vs `ZCODE-WALLPAPER-*`）与**独立备份**（`app.asar.gwp-backup` vs `app.asar.wallpaper-backup`），各自的打补丁 / 换图 / 还原只识别和剥除自己的块，两个壁纸补丁可共存。
+
+开机动画补丁（第八章）动的是 `out/renderer/index.html`（渲染层入口页，不是 CSS、也不是 bundle），使用**独立标记**（`ZCODE-BOOT-ANIMATION-*`）与**独立备份**（`app.asar.boot-backup`），与上述四个 asar 补丁的修改对象完全不重叠，可任意顺序叠加、单独还原。实测：在已打挡位壁纸补丁的 asar 上应用开机动画后，除 `index.html` 外 27772 个文件逐字节不变。
 
 两个 `zcode.cjs` 补丁（标题 v7+refresh / 用量保留）修改同一文件的不同字节区域，全部基于**当前文件原位操作**：标题补丁会改变文件长度（`zcode.cjs` 为独立文件，长度可变且安全），用量保留为等长替换；还原优先在当前文件上反替换补丁片段（备份整文件覆盖仅作兜底，且仅当当前文件无法识别补丁痕迹时使用）。因此任意顺序叠加、重打或逐一还原，其余补丁始终保持完好。
 
@@ -445,6 +448,61 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 ---
 
+## 八、开机动画补丁（启动片头）
+
+参考 [dsh-boot-animation](https://github.com/NativeDog1/dsh-boot-animation) 的播放规则，给 ZCode 桌面版加一段**开机片头**：每次启动 ZCode 在窗口里播放一次视频，铺满整个窗口，点任意处或按 Esc 跳过，播完自动淡出，不打断任何功能。
+
+**播放规则（与参考项目一致的决策契约）**
+
+| 场景 | 行为 |
+| --- | --- |
+| 启动 ZCode | 播一次（等应用自身启动完成、界面就绪后再盖上来） |
+| 同一窗口按 F5 刷新 | **不重播**（`sessionStorage` 记录，窗口关闭才清除） |
+| 下次启动 / 重新打开窗口 | 再播一次 |
+| 点任意处 / 按 Esc | 立即淡出并停止（不再阻塞界面） |
+| 视频出错 / 25 秒内没播完 | 立即淡出并停止，绝不黑屏卡死 |
+| 更新小窗（`windowKind=update-status`） | **不播**（同一入口页，脚本内显式排除） |
+| 自动播放策略 | 先静音播放（Chromium 必然放行），随后尝试取消静音；若系统不允许有声自动播放，静默回退为静音继续播 |
+
+**片源**：把片头视频放进工具包目录的 `boot-animation/`（支持 `.mp4` / `.webm` / `.mov`，单文件上限 12 MB）。脚本按文件名排序取第一个，也可用 `-Clip <文件名或去扩展名>` 指定。仓库自带 `deepseek-brand-intro.mp4`（1280×720、7 秒、1.25 MB）作为默认片源；换成自己的片子后重跑补丁即可。
+
+**打补丁 / 换片**
+
+1. 完全退出 ZCode（托盘图标右键 → Quit）
+2. （可选）把新的片头视频放进 `boot-animation/`
+3. 双击 `patch-zcode-boot-animation.bat`（或 `zcode-toolbox.bat` 选 `[8]`）
+4. 完成后自动重启 ZCode，片头即生效
+
+**还原**
+
+1. 完全退出 ZCode
+2. 双击 `restore-zcode-boot-animation.bat`（或工具箱选 `[16]`）：从当前 asar 原位剥除动画块，字体 / 壁纸 / 挡位壁纸 / 禁更新等其它补丁全部保留
+
+**工作原理与安全机制**
+
+- **注入点**：整个功能是追加到 `out/renderer/index.html` 的一段块（`<style>` + 覆盖层 `<div>` + `<script>`），在 `</body>` 之前插入，用 `ZCODE-BOOT-ANIMATION-BEGIN/END` 注释标记。选它而不是改渲染层 bundle，是因为 bundle 文件名带构建哈希、内容是压缩过的；`index.html` 名字稳定、可读，只需要锚点 `</body>` 存在。
+- **片源自包含**：视频以 `data:video/*;base64` 内嵌在 `index.html` 里，运行时不读磁盘，工具包目录移动或删除都不影响已装好的补丁。
+- **不抢跑**：等 ZCode 自己的启动信号（`zcode-react-startup-ready` 事件或 `body.zcode-startup-ready`）后再开播，另有 2.5 秒兜底，不会永远等不到。
+- **失败不改坏宿主**：`ended` / `error` / 25 秒超时三条路径都汇到同一个「淡出并移除」，覆盖层只在自己可见时拦截点击。
+- **asar 重打包**：解包 → 剥旧块 → 插入新块 → 重算偏移 → 重打包。除 `index.html` 外其余 27772 个文件逐字节不变（已实测比对），被替换文件的 asar integrity 按 electron/asar 格式重算并通过校验。
+- **独立标记与备份**：`ZCODE-BOOT-ANIMATION-*` 标记 + `app.asar.boot-backup` + SHA-256 指纹，与其它 asar 补丁完全隔离。
+- **幂等**：重复运行自动「剥旧块 → 写新块」，已实测同一输入产物逐字节一致；损坏块拒绝执行并提示先还原。
+- **重跑自检**：重打包写盘前从磁盘重读源 asar，逐字节抽检 `package.json` 与 `out/main/index.js` 两个哨兵文件，任何错位立即中止且原 asar 不动。
+- **版本保护**：`out/renderer/index.html` 找不到、或其中没有 `</body>` 时拒绝执行（说明 ZCode 版本结构变了，等适配）。
+
+**已验证项（本机隔离副本实测）**
+
+- 在已打挡位壁纸补丁的真实 asar 上打补丁：文件数 27773 不变，除 `index.html` 外 27772 个文件逐字节一致；
+- `index.html` 中标记各 1 处、data URI 存在、块位于 `</body>` 之前，内嵌 base64 解码后的 SHA-256 与源视频一致；
+- 被替换文件的 `integrity.hash` 与 `integrity.blocks` 均与重算结果一致；
+- 重复运行产物与首次产物**逐字节相同**（幂等）；
+- 还原后 `index.html` 与原始文件**逐字节相同**；
+- 真实 Chromium 渲染验证：覆盖层铺满视口、视频 `readyState=4` 正常播放、按 Esc 立即移除并写入 `sessionStorage` 标记。
+
+> 升级注意：与其它 asar 补丁相同——ZCode 升级覆盖 `app.asar` 后失效，重跑本补丁即可。片源要求视频编码能被 Chromium 解码（H.264 / VP9 / AV1 均可）；过大的片子（>12 MB）建议先压到 720p 再放进去。
+
+---
+
 ## 字体说明
 
 `fonts/` 目录附带全部字体资源压缩包，需解压后安装：
@@ -497,6 +555,9 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-usage.bat` / `restore-zcode-usage.ps1` | 用量清理还原入口（优先原位反替换，兼容同文件其他补丁） |
 | `patch-zcode-wallpaper-gear.bat` / `patch-zcode-wallpaper-gear.ps1` | 挡位壁纸补丁入口（思考级别联动换图，含纱浓度调节） |
 | `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
+| `patch-zcode-boot-animation.bat` / `patch-zcode-boot-animation.ps1` | 开机动画补丁入口（内嵌 `boot-animation/` 内首个视频，支持 `-Clip` 指定） |
+| `restore-zcode-boot-animation.bat` / `restore-zcode-boot-animation.ps1` | 开机动画还原入口（只剥自己的 HTML 块，其它补丁保留） |
+| `boot-animation/*.mp4` | 开机动画片源（自带 `deepseek-brand-intro.mp4`；换成自己的视频后重跑补丁即可，单文件 ≤12 MB） |
 | `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … M4 最高挡；「关闭思考」不配图），见第七章映射表 |
 | `zcode-timezone-state.json` | 时区补丁的还原点（记录打补丁前的用户级 TZ 值；还原时自动清理） |
 | `zcode-toolbox.bat` / `zcode-toolbox.ps1` | 统一工具箱入口（任务清单多选，一次退出检查，最后统一重启） |
@@ -504,9 +565,11 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `fonts/*.zip` | 字体资源压缩包，需解压安装，见「字体说明」 |
 | `app.asar.font-backup.sha256` / `zcode.cjs.title-backup.sha256` / `app.asar.wallpaper-backup.sha256` / `app.asar.updates-backup.sha256` | 备份 SHA-256 指纹 |
 | `app.asar.gwp-backup.sha256` | 挡位壁纸补丁备份指纹（备份本体与其它 asar 备份一样不入库） |
+| `app.asar.boot-backup.sha256` | 开机动画补丁备份指纹（备份本体不入库） |
 | `zcode.cjs.usage-backup.sha256` | 用量补丁备份指纹（与备份同放目标文件目录） |
 | `app.asar.font-backup` / `zcode.cjs.title-backup` / `app.asar.wallpaper-backup` / `app.asar.updates-backup` | 首次打补丁时在本机生成的原始文件备份（体积大，已被 `.gitignore` 排除，不入库） |
 | `app.asar.gwp-backup` | 挡位壁纸补丁的原始文件备份（同上不入库，`.gitignore` 已排除） |
+| `app.asar.boot-backup` | 开机动画补丁的原始文件备份（同上不入库，`.gitignore` 已排除） |
 | `zcode.cjs.usage-backup` | 用量补丁的原始文件备份（生成在 ZCode 安装目录 `resources\glm\` 下，跟随目标文件，不入库） |
 
 工具包可整体拷贝到任意目录使用，备份与指纹始终存放在工具包所在目录内。
