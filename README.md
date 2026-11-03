@@ -20,7 +20,7 @@
 ![GitHub code size](https://img.shields.io/github/languages/code-size/caixibei/zcode-modkit)
 ![GitHub file count](https://img.shields.io/github/directory-file-count/caixibei/zcode-modkit)
 
-ZCode 桌面客户端补丁工具包，包含八个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.16.3**（上一适配版本 3.14.1 的脚本快照见 GitHub Release `zcode-3.14.1`）：
+ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.16.3**（上一适配版本 3.14.1 的脚本快照见 GitHub Release `zcode-3.14.1`）：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
 2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v9）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
@@ -30,8 +30,10 @@ ZCode 桌面客户端补丁工具包，包含八个独立补丁与一个统一�
 6. **用量历史保留补丁**（`patch-zcode-usage`）——停用用量统计的 30 天滚动清理，「累计 Token 数」跨月持续累加不再缩水
 7. **挡位壁纸补丁**（`patch-zcode-wallpaper-gear`）——壁纸跟随输入框「思考级别」自动切换，纯 CSS 实现，切档即时换图（「关闭思考」不配图，M1–M4 覆盖其余全部档位，详见第七章映射表）
 8. **开机动画补丁**（`patch-zcode-boot-animation`）——每次启动 ZCode 播放一段铺满窗口的片头视频，点任意处或按 Esc 跳过，播完自动淡出；片源放 `boot-animation/` 目录（参考 dsh-boot-animation 的播放规则实现，详见第八章）
+9. **输入框水印文字补丁**（`patch-zcode-draft-logo`）——把新建任务页那个大 Z 水印换成自定义文字水印（默认 `DeepSeek Harness`），纯 CSS 覆盖，不动 JS，详见第九章
+10. **应用图标补丁**（`patch-zcode-icon`）——把托盘 / 任务栏 / 开始菜单图标换成自定义 ico，不修改 `ZCode.exe`、不破坏签名，详见第十章
 
-**统一工具箱**（`zcode-toolbox.bat`）：把 8 个补丁 + 8 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。五个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新 / 开机动画）全部基于**当前 asar 原位操作**，打/还原/换图互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v9+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）。
+**统一工具箱**（`zcode-toolbox.bat`）：把 10 个补丁 + 10 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。六个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新 / 开机动画 / 水印文字）全部基于**当前 asar 原位操作**，打/还原/换图/换字互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v9+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）；图标补丁只改 `resources` 下的两个图片文件与 `.lnk` 的图标指向，与 asar 完全无关（见第十章）。
 
 ---
 
@@ -40,17 +42,17 @@ ZCode 桌面客户端补丁工具包，包含八个独立补丁与一个统一�
 1. 完全退出 ZCode（托盘图标右键 → Quit）
 2. 双击 `zcode-toolbox.bat`
 3. 在菜单里输入任务编号（可多选，空格或逗号分隔）：
-   - `[1]` 字体补丁 `[2]` 标题修复+持续重提炼 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画
-   - `[9]` 还原字体 `[10]` 还原标题+持续重提炼 `[11]` 还原壁纸 `[12]` 恢复更新检查 `[13]` 还原时区 `[14]` 还原用量清理 `[15]` 还原挡位壁纸 `[16]` 还原开机动画
+   - `[1]` 字体补丁 `[2]` 标题修复+持续重提炼 `[3]` 壁纸补丁 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画 `[17]` 水印文字 `[18]` 应用图标
+   - `[9]` 还原字体 `[10]` 还原标题+持续重提炼 `[11]` 还原壁纸 `[12]` 恢复更新检查 `[13]` 还原时区 `[14]` 还原用量清理 `[15]` 还原挡位壁纸 `[16]` 还原开机动画 `[19]` 还原水印 `[20]` 还原应用图标
 4. 确认后按序执行；某任务失败立即停止后续任务（已完成的任务保持其状态），修好后再跑一次即可
 5. 全部成功后自动重启一次 ZCode
 
 单独的 `patch-*-*.bat` / `restore-*-*.bat` 依然可用，行为与工具箱内对应任务一致。
 
-任务编号清单（1–8 为打补丁，9–16 为对应还原；原任务 8/16 曾并入标题链路，现开机动画占用这两个编号）：
+任务编号清单（1–8 与 17–18 为打补丁，9–16 与 19–20 为对应还原；原任务 8/16 曾并入标题链路，现开机动画占用这两个编号；17–20 为新增的水印与图标补丁，沿用原有编号不重排）：
 
-- 打补丁：`[1]` 字体 `[2]` 标题修复+持续重提炼 `[3]` 壁纸 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画
-- 还原：`[9]` 字体 `[10]` 标题+持续重提炼 `[11]` 壁纸 `[12]` 更新检查 `[13]` 时区 `[14]` 用量清理 `[15]` 挡位壁纸 `[16]` 开机动画
+- 打补丁：`[1]` 字体 `[2]` 标题修复+持续重提炼 `[3]` 壁纸 `[4]` 禁用更新检查 `[5]` 时区修复 `[6]` 用量历史保留 `[7]` 挡位壁纸 `[8]` 开机动画 `[17]` 水印文字 `[18]` 应用图标
+- 还原：`[9]` 字体 `[10]` 标题+持续重提炼 `[11]` 壁纸 `[12]` 更新检查 `[13]` 时区 `[14]` 用量清理 `[15]` 挡位壁纸 `[16]` 开机动画 `[19]` 水印 `[20]` 应用图标
 
 ### 互不影响保证
 
@@ -63,6 +65,10 @@ ZCode 桌面客户端补丁工具包，包含八个独立补丁与一个统一�
 挡位壁纸补丁（第七章）与桌面壁纸补丁同为 CSS 追加块，但使用**独立标记**（`ZCODE-GWP-*` vs `ZCODE-WALLPAPER-*`）与**独立备份**（`app.asar.gwp-backup` vs `app.asar.wallpaper-backup`），各自的打补丁 / 换图 / 还原只识别和剥除自己的块，两个壁纸补丁可共存。
 
 开机动画补丁（第八章）动的是 `out/renderer/index.html`（渲染层入口页，不是 CSS、也不是 bundle），使用**独立标记**（`ZCODE-BOOT-ANIMATION-*`）与**独立备份**（`app.asar.boot-backup`），与上述四个 asar 补丁的修改对象完全不重叠，可任意顺序叠加、单独还原。实测：在已打挡位壁纸补丁的 asar 上应用开机动画后，除 `index.html` 外 27772 个文件逐字节不变。
+
+水印文字补丁（第九章）与桌面 / 挡位壁纸补丁改的是**同一个** `styles-*.css`，但使用**独立标记**（`ZCODE-DRAFTLOGO-*`）与**独立的轻量还原点**（`app.asar.draftlogo-css-backup.bin`，只存这份 CSS 的字节，约 700 KB，不再额外复制 350 MB 整包）。打补丁 / 换文字 / 还原都只剥除并重写自己的块，壁纸块与字体栈原样保留；还原时优先「原位剥块」，仅当两个标记被破坏时才回退到该还原点（届时会明确提示并要求确认）。
+
+图标补丁（第十章）完全不经过 asar：只写 `resources\tray_icon.ico` 与 `resources\icon_windows.png`，再改 `.lnk` 的图标指向，因此与任何 asar 补丁零冲突，可单独打、单独还原；`ZCode.exe` 本身从不修改。
 
 两个 `zcode.cjs` 补丁（标题 v7+refresh / 用量保留）修改同一文件的不同字节区域，全部基于**当前文件原位操作**：标题补丁会改变文件长度（`zcode.cjs` 为独立文件，长度可变且安全），用量保留为等长替换；还原优先在当前文件上反替换补丁片段（备份整文件覆盖仅作兜底，且仅当当前文件无法识别补丁痕迹时使用）。因此任意顺序叠加、重打或逐一还原，其余补丁始终保持完好。
 
@@ -504,6 +510,77 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 ---
 
+## 九、输入框水印文字补丁（大 Z → 文字）
+
+新建任务页（空输入框状态）居中那个大 Z 水印，把它换成一行文字水印（默认 `DeepSeek Harness`）。
+
+**水印的来源**（3.16.3 实测）：它与问候语在同一个组件里，渲染为 `<div aria-hidden="true" class="... aspect-[5/4] w-[min(72vw,25rem)] ...">` 容器内的两个节点——暗色主题是 `img[data-v4-draft-logo="dark"]`（一个 436×360 的 SVG data URI），亮色主题是内联 `<svg width="400" height="320" viewBox="0 0 400 320">`。
+
+**补丁原理**：不碰 JS bundle，只向渲染层 `styles-*.css` 追加一段带 `ZCODE-DRAFTLOGO-PATCH-BEGIN/END` 标记的 CSS 块——先 `display:none` 隐藏上面两个节点，再用容器 `::after` 以 `background-image: url("data:image/svg+xml;base64,...")` 画文字水印，`background-size:contain` 保证跟随容器缩放（窗口变窄时字体等比缩小，不会溢出）。文字在 SVG 内绘制（字号 42px，画布 436×360，实际渲染到最大 400×320 的框，等效约 38px），带渐变填充与轻微高斯模糊。
+
+**明暗两套配色**：ZCode 用 `@media (prefers-color-scheme: dark)` 切主题（已核对其编译产物），所以补丁内置两套 SVG——**暗色主题用偏白墨色**（`#FFFFFF → #B6BCC7`），**亮色主题用偏黑墨色**（`#3B4048 → #171A1F`）；由于深墨在浅底上更「吃」，亮色分支的透明度取暗色的 1.5 倍，两者观感对齐。`-Opacity` / 交互输入只影响暗色主题的基准值。
+
+**用法**：
+
+1. 完全退出 ZCode（托盘图标右键 → Quit）
+2. 双击 `patch-zcode-draft-logo.bat`（或工具箱 `[17]`）
+3. 输入水印透明度 5–45（这是**暗色主题**的基准值，`16` 最接近原 Z 的观感；亮色主题自动按 1.5 倍渲染，直接回车即用默认值）
+4. 完成后自动重启 ZCode
+
+**换文字 / 换透明度**：重跑即可，只替换自己的 CSS 块，壁纸补丁与字体补丁原样保留。文字也可在命令行直接指定：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File patch-zcode-draft-logo.ps1 -Text "your text" -Opacity 20
+```
+
+**还原**：`restore-zcode-draft-logo.bat`（或工具箱 `[19]`）——优先在当前 asar 上剥除自己的块（壁纸 / 字体 / 开机动画全部保留）；只有两个标记被破坏时才回退到 `app.asar.draftlogo-css-backup.bin`，届时会提示「该还原点不含之后新增的 CSS 块」并要求确认。
+
+**安全机制**：与壁纸补丁同一套 asar 重建器——只改一份 CSS，其余 27000+ 文件逐字节复制；写盘前用 `package.json` 与 `out/main/index.js` 两个哨兵文件逐字节比对，任何错位立即中止且原 asar 不动；重跑时只剥自己的块，不会重复叠加。
+
+> 升级注意：ZCode 升级会覆盖 `app.asar`，补丁随之失效，重跑一次即可（脚本按 `styles-*.css` 通配定位，不写死文件名哈希）。若新版本改了水印节点的 DOM 结构，`::after` 的选择器可能匹配不到，表现为「Z 没了但文字也没出来」——此时用 `[19]` 还原，等工具包适配。
+
+---
+
+## 十、应用图标补丁
+
+把 ZCode 在 Windows 上显示的图标换成自定义图标，**不修改 `ZCode.exe`**，因此不动数字签名、不触发杀软误报。
+
+**覆盖的四类位置**：
+
+| 位置 | 实际目标 | 说明 |
+| --- | --- | --- |
+| 托盘图标 | `resources\tray_icon.ico` | 主进程 `resolveDesktopTrayIconPath` 在打包态直接读取该文件 |
+| 窗口 / 任务栏图标 | `resources\icon_windows.png` | 主进程 `new BrowserWindow({ icon })` 使用该 PNG |
+| 「关于」窗口 / 拖拽图标 | `resources\icon.png` | `resolveAboutIconPath` 给关于窗口设图标；`resolveZCodeIcon` 生成 64 px 的拖拽预览图——Windows 同样读这个文件 |
+| 开始菜单 / 桌面 / 固定到任务栏 | 对应 `.lnk` 的 `IconLocation` | 只改指向，不动目标程序；`.lnk` 原本指向 `ZCode.exe,0` |
+
+**用法**：
+
+1. 把要用的图标放到 `icon\app-icon.png`（默认源，540×540 透明 PNG；缺失时回退 `icon\app-icon.ico`），也可用 `-IconPath` 指定任意 ico / png / jpg，或运行后按提示输入路径
+2. 完全退出 ZCode
+3. 双击 `patch-zcode-icon.bat`（或工具箱 `[18]`）
+4. 完成后自动重启 ZCode，图标即时生效
+
+**多尺寸重建**：源图标只有一帧 256×256 时，托盘在 16 px 下会发糊，所以脚本按 16 / 20 / 24 / 32 / 40 / 48 / 64 / 128 / 256 重新生成——128 及以下用 32 bpp DIB 帧（小尺寸最清晰，GDI+ 与老工具都能读），256 用 PNG 帧（体积小）。`icon_windows.png` 与 `icon.png` 由同一张位图导出（最长边 512，源图更小则保持原尺寸）。
+
+**还原点**：
+
+- `icon\app-icon-original.ico`：首次打补丁时从 `resources\icon.png`（出厂应用图标，此时尚未被本补丁覆盖）生成的基线，用于还原出厂外观；
+- `app-icon-backup\`：**仅当** `resources` 下的现有图标不是「本次要装的那一个」时才备份，含 `tray_icon.ico` / `icon_windows.png` / `icon.png`；如果该文件本来就是自定义图标（例如手动换过），不备份，还原时直接用上面的出厂基线重建，避免「还原成本还自定义图标」；
+- `zcode-icon-state.json`：记录每个被改过的 `.lnk` 的原始 `IconLocation`。
+
+**还原**：`restore-zcode-icon.bat`（或工具箱 `[20]`）——默认还原到**打补丁前**的状态：托盘、窗口、关于三处图标从 `app-icon-backup\` 恢复，没有备份则从出厂基线重建（托盘按 9 档多尺寸，两张 PNG 按基线可用尺寸）；快捷方式只有当 `IconLocation` 仍是本补丁写入的值时才回滚（手动改过的不动）。加 `-Factory` 可忽略备份、强制从出厂基线重建（想把 ZCode 原始 Z 图标拿回来时用）。
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File restore-zcode-icon.ps1 -Factory
+```
+
+> 升级注意：ZCode 升级会重装 `resources` 下的图标文件，重跑本补丁即可恢复。`C:\ProgramData` 下的开始菜单快捷方式在没有管理员权限时可能写不进去，脚本会提示 `[warn] shortcut not updated` 并继续完成其余部分。
+
+> 升级注意：ZCode 升级会重装 `resources` 下的图标文件，重跑本补丁即可恢复。`C:\ProgramData` 下的开始菜单快捷方式在没有管理员权限时可能写不进去，脚本会提示 `[warn] shortcut not updated` 并继续完成其余部分。
+
+---
+
 ## 字体说明
 
 `fonts/` 目录附带全部字体资源压缩包，需解压后安装：
@@ -558,6 +635,17 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
 | `patch-zcode-boot-animation.bat` / `patch-zcode-boot-animation.ps1` | 开机动画补丁入口（内嵌 `boot-animation/` 内视频；多个文件时交互选择，`-Clip` 可跳过） |
 | `restore-zcode-boot-animation.bat` / `restore-zcode-boot-animation.ps1` | 开机动画还原入口（只剥自己的 HTML 块，其它补丁保留） |
+| `patch-zcode-draft-logo.bat` / `patch-zcode-draft-logo.ps1` | 输入框水印文字补丁入口（默认 `DeepSeek Harness`，`-Text` / `-Opacity` 可覆盖；只追加 `ZCODE-DRAFTLOGO-*` CSS 块） |
+| `restore-zcode-draft-logo.bat` / `restore-zcode-draft-logo.ps1` | 水印文字还原入口（优先原位剥块，其它 CSS 补丁保留） |
+| `patch-zcode-icon.bat` / `patch-zcode-icon.ps1` | 应用图标补丁入口（托盘 + 窗口/任务栏 + 关于 + 快捷方式，不改 exe） |
+| `restore-zcode-icon.bat` / `restore-zcode-icon.ps1` | 应用图标还原入口（默认回滚到打补丁前；`-Factory` 强制还原出厂外观） |
+| `icon/app-icon.png` | 图标补丁的默认源（540×540 透明 PNG，蓝色鲸鱼）；换成自己的图后重跑即可 |
+| `icon/app-icon.ico` | 同款的 9 帧 ico（默认源缺失时的回退，也可用于其它需要 ico 的场景） |
+| `icon/app-icon-alt-black.png` / `.ico` | 黑色鲸鱼备选稿（540 PNG + 256 ico）；用 `-IconPath "icon\app-icon-alt-black.png"` 切换 |
+| `icon/app-icon-original.ico` | 出厂图标基线（首次打图标补丁时从 `resources\icon.png` 生成，供还原使用） |
+| `app.asar.draftlogo-css-backup.bin` / `.sha256` | 水印补丁的轻量还原点（只存这份 CSS，约 700 KB，不入库） |
+| `app-icon-backup\` | 图标补丁首次运行时的原始图标备份（不入库） |
+| `zcode-icon-state.json` | 图标补丁的快捷方式还原点（记录每个 `.lnk` 原始 IconLocation） |
 | `boot-animation/*.mp4` | 开机动画片源（自带 `deepseek-brand-intro.mp4`；换成自己的视频后重跑补丁即可，单文件 ≤12 MB） |
 | `images/M1.*` … `images/M4.*` | 挡位壁纸的档位图片（M1 最低挡 … M4 最高挡；「关闭思考」不配图），见第七章映射表 |
 | `zcode-timezone-state.json` | 时区补丁的还原点（记录打补丁前的用户级 TZ 值；还原时自动清理） |
@@ -593,6 +681,9 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 - **累计 Token 数还是越来越少**：用量保留补丁只对**补丁之后写入**的数据生效——先退出 ZCode，运行 `patch-zcode-usage.bat`（工具箱 `[6]`）再启动；打补丁前已被清理的历史无法找回。验证方法：PowerShell 在 `resources\glm\zcode.cjs` 中搜索 `hos=9e15`，能搜到即补丁在位；搜到 `mos*24*60*60*1e3` 则是未打或已还原状态。
 - **提示 title fix already present / 上游已修复**：ZCode 3.14.3 起官方已修复标题自动生成。v9 补丁（3.16.3）基于官方新链路改造，不再依赖此提示；3.14.1 的旧版补丁保留在 GitHub Release `zcode-3.14.1`。
 - **还原用量补丁时提示 unknown state**：目标文件的补丁片段与脚本签名不匹配（通常是 ZCode 版本更新），脚本拒绝盲写。确认后可删除目标目录中的 `zcode.cjs.usage-backup` 让脚本重建基线，或等工具包适配新版本。
+- **升级后主页大 Z 又出现了**：升级覆盖了 `app.asar`，水印 CSS 块随新版丢失——重跑 `patch-zcode-draft-logo.bat`（工具箱 `[17]`）即可；若新版改了水印 DOM，表现为 Z 消失但文字也不出现，先用 `[19]` 还原再等适配。
+- **托盘图标没变 / 开始菜单还是旧图标**：托盘与窗口图标读的是 `resources` 下的文件，必须完全退出 ZCode 再启动；开始菜单图标来自 `.lnk`，若 `C:\ProgramData` 下那条写入失败（脚本提示 `[warn] shortcut not updated`），用管理员身份跑一次 `patch-zcode-icon.bat`，或右键快捷方式「属性 → 更改图标」手动指向 `resources\tray_icon.ico`。
+- **想换回 ZCode 原图标**：运行 `restore-zcode-icon.bat`（工具箱 `[20]`）；若 `app-icon-backup\` 不存在，脚本会用 `icon\app-icon-original.ico`（出厂基线）重建。
 
 ## Star History
 

@@ -1,5 +1,5 @@
 # ZCode Patch Toolbox (v1, portable) - unified menu for all patch/restore tasks
-# - Lists the 7 patches (apply) and 7 restores as a picklist; the user selects
+# - Lists the 10 patches (apply) and 10 restores as a picklist; the user selects
 #   ONE OR MANY tasks (e.g. "1 3" or "1,3"), they run in ascending order.
 # - ZCode running-check happens ONCE up front; ZCode (if found) is restarted
 #   ONCE at the end when any selected task actually patched something.
@@ -38,7 +38,11 @@ $tasks = @(
     [pscustomobject]@{ Id = '13'; Kind = 'restore'; Label = 'restore timezone setting'; Script = 'restore-zcode-timezone.ps1' },
     [pscustomobject]@{ Id = '14'; Kind = 'restore'; Label = 'restore 30d usage prune'; Script = 'restore-zcode-usage.ps1' },
     [pscustomobject]@{ Id = '15'; Kind = 'restore'; Label = 'restore gear wallpaper';  Script = 'restore-zcode-wallpaper-gear.ps1' },
-    [pscustomobject]@{ Id = '16'; Kind = 'restore'; Label = 'restore boot animation';  Script = 'restore-zcode-boot-animation.ps1' }
+    [pscustomobject]@{ Id = '16'; Kind = 'restore'; Label = 'restore boot animation';  Script = 'restore-zcode-boot-animation.ps1' },
+    [pscustomobject]@{ Id = '17'; Kind = 'patch';   Label = 'empty-draft watermark text (replaces the big Z)'; Script = 'patch-zcode-draft-logo.ps1' },
+    [pscustomobject]@{ Id = '18'; Kind = 'patch';   Label = 'app icon (tray + taskbar + about + shortcuts)'; Script = 'patch-zcode-icon.ps1' },
+    [pscustomobject]@{ Id = '19'; Kind = 'restore'; Label = 'restore draft watermark (big Z)'; Script = 'restore-zcode-draft-logo.ps1' },
+    [pscustomobject]@{ Id = '20'; Kind = 'restore'; Label = 'restore original app icon'; Script = 'restore-zcode-icon.ps1' }
 )
 
 function Show-Menu {
