@@ -181,6 +181,9 @@ function Load-SourceBitmap([string]$path) {
 
 # ---- target discovery --------------------------------------------------------------
 function Find-ZCodeDir {
+    # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
+    # so a multi-task run does not ask for the same path in every script
+    if ($env:ZCODE_RESOURCES_DIR -and (Test-Path (Join-Path $env:ZCODE_RESOURCES_DIR 'app.asar'))) { return $env:ZCODE_RESOURCES_DIR }
     # returns the resources dir (the folder containing app.asar)
     try {
         $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1

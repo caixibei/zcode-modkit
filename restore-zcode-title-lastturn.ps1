@@ -102,6 +102,9 @@ function Test-JsSyntax([string]$js) {
     }
 }
 function Find-ZCodeDir {
+    # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
+    # so a multi-task run does not ask for the same path in every script
+    if ($env:ZCODE_RESOURCES_DIR -and (Test-Path (Join-Path $env:ZCODE_RESOURCES_DIR 'glm\zcode.cjs'))) { return (Join-Path $env:ZCODE_RESOURCES_DIR 'glm') }
     try {
         $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
         if ($p) {

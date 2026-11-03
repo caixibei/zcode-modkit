@@ -100,10 +100,16 @@ function Hash-Bytes([byte[]]$b) {
 }
 
 function Find-ZCodeDir {
+    # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
+    # so a multi-task run does not ask for the same path in every script
+    if ($env:ZCODE_RESOURCES_DIR -and (Test-Path (Join-Path $env:ZCODE_RESOURCES_DIR 'app.asar'))) { return $env:ZCODE_RESOURCES_DIR }
     # 1) running process path
     try {
         $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
-        if ($p) { return Split-Path (Split-Path $p.Path -Parent) -Parent }
+        if ($p) {
+            $cand = Join-Path (Split-Path $p.Path -Parent) 'resources\app.asar'
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+        }
     } catch {}
     # 2) registry uninstall entries (32/64-bit + per-user)
     $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',

@@ -81,6 +81,54 @@ if ($procs) {
     exit 1
 }
 
+# 0b) resolve the install path ONCE and hand it to every child script through
+#     ZCODE_RESOURCES_DIR; without this each selected task re-detected (and, when
+#     detection failed, re-asked) for the same resources folder.
+function Get-ZCodeResourcesDir {
+    try {
+        $p = Get-Process -Name 'ZCode' -ErrorAction SilentlyContinue | Where-Object Path | Select-Object -First 1
+        if ($p) {
+            $cand = Join-Path (Split-Path $p.Path -Parent) 'resources\app.asar'
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+        }
+    } catch {}
+    $keys = @('HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+              'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*')
+    foreach ($k in $keys) {
+        try {
+            $hit = Get-ItemProperty $k -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -like '*ZCode*' -and $_.InstallLocation } | Select-Object -First 1
+            if ($hit) {
+                $cand = Join-Path $hit.InstallLocation 'resources\app.asar'
+                if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+            }
+        } catch {}
+    }
+    $candidates = @('D:\installer\zcode', "$env:LOCALAPPDATA\Programs\zcode", "$env:ProgramFiles\zcode", "${env:ProgramFiles(x86)}\zcode")
+    foreach ($d in $candidates) {
+        try {
+            if (-not (Test-Path $d)) { continue }
+            $cand = Join-Path $d 'resources\app.asar'
+            if (Test-Path $cand) { return (Split-Path $cand -Parent) }
+        } catch { continue }
+    }
+    return $null
+}
+$resourcesDir = Get-ZCodeResourcesDir
+if (-not $resourcesDir) {
+    Write-Host '[?] Could not auto-locate ZCode. Example: D:\installer\zcode\resources' -ForegroundColor Yellow
+    $manual = Read-Host 'Enter the folder that contains app.asar (resources dir)'
+    if (-not $manual -or -not (Test-Path (Join-Path $manual 'app.asar'))) {
+        Write-Host "[X] app.asar not found under: $manual" -ForegroundColor Red
+        Read-Host 'Press Enter to exit'
+        exit 1
+    }
+    $resourcesDir = $manual
+}
+$env:ZCODE_RESOURCES_DIR = $resourcesDir
+$env:ZCODE_INSTALL_DIR = Split-Path $resourcesDir -Parent
+Write-Host ("resources: " + $resourcesDir) -ForegroundColor DarkGray
+
 Show-Menu
 $sel = Read-Host 'select task number(s), separated by space or comma (e.g. 1 3 or 1,3,4)'
 if ($sel -eq '0' -or -not $sel) { exit 0 }

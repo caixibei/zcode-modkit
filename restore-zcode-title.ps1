@@ -35,6 +35,9 @@ $oldLang = "- Use the user's primary language."
 $newLang = "- MUST use the user's primary language."
 
 function Find-ZCodeDir {
+    # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
+    # so a multi-task run does not ask for the same path in every script
+    if ($env:ZCODE_RESOURCES_DIR -and (Test-Path (Join-Path $env:ZCODE_RESOURCES_DIR 'glm\zcode.cjs'))) { return (Join-Path $env:ZCODE_RESOURCES_DIR 'glm') }
     # returns the resources\glm dir (the folder containing zcode.cjs); every
     # branch must agree on this convention or the main path joins break
     try {
