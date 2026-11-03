@@ -246,30 +246,22 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
 # Single-line lockup drawn ABOVE the greeting. The ::after box is wider than the
 # container (left/right -25%) so the wordmark can be rendered large, and it ends
 # at 40% of the container height, leaving a clear gap to the greeting line.
-# Two colour variants are emitted because ZCode switches themes with
+# The watermark is real CSS text (not an SVG background image) so it can reuse the
+# app font stack: `var(--font-sans)` is the variable the UI font patch rewrites.
+# (An SVG loaded as an image cannot see CSS variables or web fonts, only system
+#  fonts by name - that is why the previous version could not reuse it.)
+# Two colour variants because ZCode switches themes with
 # @media (prefers-color-scheme: dark) - verified in the built stylesheet:
 #   * light theme -> dark ink   (#3B4048 -> #171A1F, black-ish)
 #   * dark theme  -> white ink  (#FFFFFF -> #B6BCC7, white-ish)
-function New-DraftLogoWatermarkSvg([string]$text, [string]$top, [string]$mid, [string]$bottom, [string]$glow) {
-    $font = 'Segoe UI Semibold, Segoe UI, Inter, Arial, sans-serif'
-    $esc = [System.Security.SecurityElement]::Escape($text)
-    # auto-fit inside 560 of the 720-wide canvas (0.56em average advance + tracking)
-    $fontSize = 58
-    if ($text.Length -gt 0) { $fontSize = [Math]::Min(58, [Math]::Floor(560 / ($text.Length * 0.56))) }
-    return @"
-<svg xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="$top"/><stop offset="0.45" stop-color="$mid"/><stop offset="1" stop-color="$bottom"/></linearGradient><filter id="b" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="5"/></filter></defs><g filter="url(#b)" opacity="0.5"><text x="360" y="225" text-anchor="middle" font-family="$font" font-size="$fontSize" letter-spacing="3" fill="$glow">$esc</text></g><text x="360" y="225" text-anchor="middle" font-family="$font" font-size="$fontSize" letter-spacing="3" fill="url(#g)">$esc</text></svg>
-"@
-}
-
 function ConvertTo-DraftLogoCss([string]$text, [int]$opacityPct) {
-    $svgOnLight = New-DraftLogoWatermarkSvg $text '#3B4048' '#22262C' '#171A1F' '#2A2E35'
-    $svgOnDark  = New-DraftLogoWatermarkSvg $text '#FFFFFF' '#D5DAE3' '#B6BCC7' '#C9CFD9'
-    $b64Light = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($svgOnLight))
-    $b64Dark  = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($svgOnDark))
+    # CSS string escaping for content:"..."
+    $cssText = $text.Replace('\', '\\').Replace('"', '\"')
     $opacity = ([double]$opacityPct / 100.0).ToString([System.Globalization.CultureInfo]::InvariantCulture)
     $css = @"
 $markerBegin
 /* ZCode empty-draft watermark patch: hides the Z mark and paints "$text".
+   Text is real CSS text so font-family can reuse --font-sans (the UI font stack).
    Light theme = dark ink, dark theme = white ink (ZCode uses prefers-color-scheme).
    Re-run patch-zcode-draft-logo.bat to change text/opacity; restore-zcode-draft-logo.bat reverts. */
 :root{--zdl-opacity:$opacity}
@@ -278,14 +270,22 @@ div[aria-hidden="true"][class*="aspect-[5/4]"]>img,
 img[data-v4-draft-logo],
 svg[viewBox="0 0 400 320"]{display:none!important}
 div[aria-hidden="true"][class*="aspect-[5/4]"]::after{
-content:"";position:absolute;left:-25%;right:-25%;top:-34%;bottom:60%;
-background-image:url("data:image/svg+xml;base64,$b64Light");
-background-repeat:no-repeat;background-position:center bottom;background-size:contain;
+content:"$cssText";
+position:absolute;left:50%;right:auto;top:-40%;bottom:62%;
+transform:translateX(-50%);
+width:max-content;max-width:calc(100vw - 1rem);
+display:flex;align-items:flex-end;justify-content:center;padding-bottom:12px;
+font-family:"LXGW WenKai","LXGW WenKai Lite","LXGW WenKai Screen",var(--font-sans, "Segoe UI Semibold"),"Segoe UI Semibold","Segoe UI",Inter,Arial,sans-serif;
+font-size:78px;font-weight:500;letter-spacing:.05em;line-height:1;white-space:nowrap;
+color:transparent;
+background-image:linear-gradient(180deg,#3B4048 0%,#22262C 45%,#171A1F 100%);
+-webkit-background-clip:text;background-clip:text;
+text-shadow:none;
 opacity:calc(var(--zdl-opacity) * 1.5);pointer-events:none;
 }
 @media (prefers-color-scheme:dark){
 div[aria-hidden="true"][class*="aspect-[5/4]"]::after{
-background-image:url("data:image/svg+xml;base64,$b64Dark");
+background-image:linear-gradient(180deg,#FFFFFF 0%,#D5DAE3 45%,#B6BCC7 100%);
 opacity:var(--zdl-opacity);
 }
 }

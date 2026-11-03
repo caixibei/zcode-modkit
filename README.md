@@ -516,11 +516,13 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 **水印的来源**（3.16.3 实测）：它与问候语在同一个组件里，渲染为 `<div aria-hidden="true" class="... aspect-[5/4] w-[min(72vw,25rem)] ...">` 容器内的两个节点——暗色主题是 `img[data-v4-draft-logo="dark"]`（一个 436×360 的 SVG data URI），亮色主题是内联 `<svg width="400" height="320" viewBox="0 0 400 320">`。
 
-**补丁原理**：不碰 JS bundle，只向渲染层 `styles-*.css` 追加一段带 `ZCODE-DRAFTLOGO-PATCH-BEGIN/END` 标记的 CSS 块——先 `display:none` 隐藏上面两个节点，再用容器 `::after` 以 `background-image: url("data:image/svg+xml;base64,...")` 画文字水印，`background-size:contain` 保证跟随容器缩放（窗口变窄时字体等比缩小，不会溢出）。
+**补丁原理**：不碰 JS bundle，只向渲染层 `styles-*.css` 追加一段带 `ZCODE-DRAFTLOGO-PATCH-BEGIN/END` 标记的 CSS 块——先 `display:none` 隐藏上面两个节点，再用容器 `::after` 的 `content:"…"` 直接画**真实 CSS 文字**（不是背景图）。
 
-**尺寸与位置**：单行文字，画布 `viewBox="0 0 720 300"`，字号 58px（按文字长度自动收缩），字距 3；`::after` 横向超出容器 25%（`left/right:-25%`，渲染宽 600px）、上移并截止在容器高度 40% 处（`top:-34%;bottom:60%`），所以水印实渲染约 **46px 高**、宽约 410px，底边距问候语约 **60–75px**；模糊半径越小越不发虚，当前 5（上一版 9）。
+**字体**：`font-family: "LXGW WenKai", "LXGW WenKai Lite", "LXGW WenKai Screen", var(--font-sans, "Segoe UI Semibold"), "Segoe UI Semibold", "Segoe UI", Inter, Arial, sans-serif`——优先**霞鹜文楷**（本机用户目录已安装 `LXGWWenKai-Regular.ttf`，Chromium 实测 `document.fonts.check('500 78px "LXGW WenKai"') = true`），未安装时回退 `--font-sans`，也就是第 1 章字体补丁改写的界面字体变量。之所以能复用，是因为水印是 CSS 文字：SVG 以图片形式加载时看不到 CSS 变量、也用不了 web 字体。注意族名只用英文：脚本以无 BOM 的 UTF-8 保存，PowerShell 5.1 会按 GBK 读取中文族名导致乱码（实测 `霞鹜文楷` 被读成 `闇為箿鏂囨シ`），所以中文别名不写入 CSS。
 
-**明暗两套配色**：ZCode 用 `@media (prefers-color-scheme: dark)` 切主题（已核对其编译产物），所以补丁内置两套 SVG——**暗色主题用偏白墨色**（`#FFFFFF → #B6BCC7`），**亮色主题用偏黑墨色**（`#3B4048 → #171A1F`）；由于深墨在浅底上更「吃」，亮色分支的透明度取暗色的 1.5 倍，两者观感对齐。`-Opacity` / 交互输入只影响暗色主题的基准值。
+**尺寸与位置**：单行文字，`font-size: 78px`、字距 `.05em`、字重 500；`::after` 用 `left:50%;transform:translateX(-50%);width:max-content` 让盒子**正好包住文字**（关键：`background-clip:text` 只会在元素盒子范围内绘制渐变，盒子比文字窄时两端会被「截断」），再用 `top:-40%;bottom:62%;padding-bottom:12px` 贴住下沿。900×600 视口实测：水印文字宽 749px、盒子宽 749px（不截断），文字底边 y=250、问候语顶边 y=280，**间距 30px**。
+
+**明暗两套配色**：ZCode 用 `@media (prefers-color-scheme: dark)` 切主题（已核对其编译产物），所以补丁写了两套渐变——**暗色主题用偏白墨色**（`#FFFFFF → #B6BCC7`），**亮色主题用偏黑墨色**（`#3B4048 → #171A1F`），通过 `background-clip:text` 上色；由于深墨在浅底上更「吃」，亮色分支的透明度取暗色的 1.5 倍。`-Opacity` / 交互输入只影响暗色主题的基准值。
 
 **用法**：
 
