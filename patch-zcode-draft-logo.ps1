@@ -243,17 +243,21 @@ function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath
 }
 
 # ---- watermark CSS block -----------------------------------------------------------
-# The container is absolute, aspect 5/4, width min(72vw,25rem): the SVG keeps the
-# original 436x360 viewBox so the text scales and centers exactly where the Z was.
+# Single-line lockup drawn ABOVE the greeting. The ::after box is wider than the
+# container (left/right -25%) so the wordmark can be rendered large, and it ends
+# at 40% of the container height, leaving a clear gap to the greeting line.
 # Two colour variants are emitted because ZCode switches themes with
 # @media (prefers-color-scheme: dark) - verified in the built stylesheet:
 #   * light theme -> dark ink   (#3B4048 -> #171A1F, black-ish)
 #   * dark theme  -> white ink  (#FFFFFF -> #B6BCC7, white-ish)
 function New-DraftLogoWatermarkSvg([string]$text, [string]$top, [string]$mid, [string]$bottom, [string]$glow) {
-    $esc = [System.Security.SecurityElement]::Escape($text)
     $font = 'Segoe UI Semibold, Segoe UI, Inter, Arial, sans-serif'
+    $esc = [System.Security.SecurityElement]::Escape($text)
+    # auto-fit inside 560 of the 720-wide canvas (0.56em average advance + tracking)
+    $fontSize = 58
+    if ($text.Length -gt 0) { $fontSize = [Math]::Min(58, [Math]::Floor(560 / ($text.Length * 0.56))) }
     return @"
-<svg xmlns="http://www.w3.org/2000/svg" width="436" height="360" viewBox="0 0 436 360"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="$top"/><stop offset="0.45" stop-color="$mid"/><stop offset="1" stop-color="$bottom"/></linearGradient><filter id="b" x="-25%" y="-25%" width="150%" height="150%"><feGaussianBlur stdDeviation="7"/></filter></defs><g filter="url(#b)" opacity="0.55"><text x="218" y="203" text-anchor="middle" font-family="$font" font-size="42" letter-spacing="1.4" fill="$glow">$esc</text></g><text x="218" y="203" text-anchor="middle" font-family="$font" font-size="42" letter-spacing="1.4" fill="url(#g)">$esc</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="300" viewBox="0 0 720 300"><defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="$top"/><stop offset="0.45" stop-color="$mid"/><stop offset="1" stop-color="$bottom"/></linearGradient><filter id="b" x="-15%" y="-15%" width="130%" height="130%"><feGaussianBlur stdDeviation="5"/></filter></defs><g filter="url(#b)" opacity="0.5"><text x="360" y="225" text-anchor="middle" font-family="$font" font-size="$fontSize" letter-spacing="3" fill="$glow">$esc</text></g><text x="360" y="225" text-anchor="middle" font-family="$font" font-size="$fontSize" letter-spacing="3" fill="url(#g)">$esc</text></svg>
 "@
 }
 
@@ -274,9 +278,9 @@ div[aria-hidden="true"][class*="aspect-[5/4]"]>img,
 img[data-v4-draft-logo],
 svg[viewBox="0 0 400 320"]{display:none!important}
 div[aria-hidden="true"][class*="aspect-[5/4]"]::after{
-content:"";position:absolute;inset:0;
+content:"";position:absolute;left:-25%;right:-25%;top:-34%;bottom:60%;
 background-image:url("data:image/svg+xml;base64,$b64Light");
-background-repeat:no-repeat;background-position:center;background-size:contain;
+background-repeat:no-repeat;background-position:center bottom;background-size:contain;
 opacity:calc(var(--zdl-opacity) * 1.5);pointer-events:none;
 }
 @media (prefers-color-scheme:dark){

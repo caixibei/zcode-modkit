@@ -40,7 +40,7 @@ $tasks = @(
     [pscustomobject]@{ Id = '15'; Kind = 'restore'; Label = 'restore gear wallpaper';  Script = 'restore-zcode-wallpaper-gear.ps1' },
     [pscustomobject]@{ Id = '16'; Kind = 'restore'; Label = 'restore boot animation';  Script = 'restore-zcode-boot-animation.ps1' },
     [pscustomobject]@{ Id = '17'; Kind = 'patch';   Label = 'empty-draft watermark text (replaces the big Z)'; Script = 'patch-zcode-draft-logo.ps1' },
-    [pscustomobject]@{ Id = '18'; Kind = 'patch';   Label = 'app icon (tray + taskbar + about + shortcuts)'; Script = 'patch-zcode-icon.ps1' },
+    [pscustomobject]@{ Id = '18'; Kind = 'patch';   Label = 'app icon (tray + taskbar + about + sidebar + shortcuts)'; Script = 'patch-zcode-icon.ps1' },
     [pscustomobject]@{ Id = '19'; Kind = 'restore'; Label = 'restore draft watermark (big Z)'; Script = 'restore-zcode-draft-logo.ps1' },
     [pscustomobject]@{ Id = '20'; Kind = 'restore'; Label = 'restore original app icon'; Script = 'restore-zcode-icon.ps1' }
 )

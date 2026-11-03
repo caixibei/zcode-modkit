@@ -25,7 +25,10 @@ param(
     [string]$IconPath,       # source icon (.ico/.png/.jpg); default icon\app-icon.ico
     [string]$TargetDir,      # advanced/testing: operate on a COPY of the resources dir (shortcuts skipped unless -WithShortcuts)
     [switch]$NoShortcuts,    # do not touch .lnk files
-    [switch]$WithShortcuts   # with -TargetDir: still update shortcuts (default off in test mode)
+    [switch]$WithShortcuts,  # with -TargetDir: still update shortcuts (default off in test mode)
+    [switch]$RestartExplorer, # restart explorer.exe so the shell drops its icon cache (closes open File Explorer windows)
+    [ValidateSet('auto', 'color', 'mono')]
+    [string]$SidebarStyle = 'auto'  # sidebar logo: auto (dark icon -> light silhouette) | color | mono
 )
 $ErrorActionPreference = 'Stop'
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
@@ -236,6 +239,140 @@ function Invoke-ShellIconRefresh {
     }
 }
 
+# ---- asar primitives (self-contained; same code as the CSS-block patches) ----------
+function Count-Str([string]$hay, [string]$s) {
+    return ([regex]::Matches($hay, [regex]::Escape($s))).Count
+}
+function Read-Asar([string]$path) {
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+    $hdrTotal = [BitConverter]::ToUInt32($bytes, 4)
+    $jsonLen  = [BitConverter]::ToUInt32($bytes, 12)
+    $json     = [System.Text.Encoding]::UTF8.GetString($bytes, 16, [int]$jsonLen)
+    return @{
+        bytes       = $bytes
+        header      = ($json | ConvertFrom-Json)
+        contentBase = 8 + [int]$hdrTotal
+    }
+}
+function Resolve-RendererCss($asar) {
+    $assets = $asar.header.files.out.files.renderer.files.assets
+    $hits = @()
+    foreach ($p in $assets.files.PSObject.Properties) {
+        if ($p.Name -like 'styles-*.css' -and -not $p.Value.unpacked -and -not $p.Value.link) { $hits += $p.Name }
+    }
+    if ($hits.Count -eq 1) { return "out/renderer/assets/$($hits[0])" }
+    throw "cannot identify the renderer stylesheet in this ZCode build (styles-*.css hits: $($hits.Count)). Version changed? Refusing."
+}
+function Get-CssEntryAndBytes($asar, [string]$relPath) {
+    $parts = $relPath -split '/'
+    $node = $asar.header
+    $last = $parts[-1]
+    foreach ($seg in ($parts | Select-Object -First ($parts.Count - 1))) {
+        if (-not $node.files -or -not $node.files.PSObject.Properties[$seg]) { return $null }
+        $node = $node.files.$seg
+    }
+    if (-not $node.files -or -not $node.files.PSObject.Properties[$last]) { return $null }
+    $file = $node.files.$last
+    if ($file.unpacked -or $file.link) { return $null }
+    $len = [int]$file.size
+    $off = [long]$file.offset
+    $bytes = New-Object byte[] $len
+    [Array]::Copy($asar.bytes, $asar.contentBase + $off, $bytes, 0, $len)
+    return @{ node = $file; bytes = $bytes }
+}
+function New-AsarIntegrity([byte[]]$bytes) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $blocks = New-Object System.Collections.Generic.List[string]
+        $blockSize = 4194304
+        for ($off = 0; $off -lt $bytes.Length; $off += $blockSize) {
+            $len = [Math]::Min($blockSize, $bytes.Length - $off)
+            $chunk = New-Object byte[] $len
+            [Array]::Copy($bytes, $off, $chunk, 0, $len)
+            [void]$blocks.Add((Get-Sha256 $chunk).ToLowerInvariant())
+        }
+        return @{
+            algorithm = 'SHA256'
+            hash      = (Get-Sha256 $bytes).ToLowerInvariant()
+            blockSize = $blockSize
+            blocks    = $blocks.ToArray()
+        }
+    } finally { $sha.Dispose() }
+}
+function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath) {
+    $header = ($asar.header | ConvertTo-Json -Depth 100 -Compress) | ConvertFrom-Json
+    $script:ai_rel = $relPath
+    $script:ai_new = $newBytes
+    $script:ai_cursor = 0L
+    $script:ai_map = @{}
+    function Walk-Assign2($node, [string]$path) {
+        if ($node.PSObject.Properties['files']) {
+            foreach ($p in $node.files.PSObject.Properties) {
+                $child = if ($path) { $path + '/' + $p.Name } else { $p.Name }
+                Walk-Assign2 $p.Value $child
+            }
+            return
+        }
+        if ($node.PSObject.Properties['link'] -and $null -ne $node.link) { return }
+        if ($node.PSObject.Properties['unpacked'] -and $node.unpacked) { return }
+        if (-not ($node.PSObject.Properties['offset'])) { return }
+        $script:ai_map[$path] = [long]$node.offset
+        $size = [long]$node.size
+        $newSize = $size
+        if ($path -eq $script:ai_rel) {
+            $newSize = [long]$script:ai_new.Length
+            $node.size = $newSize
+            if ($node.PSObject.Properties['integrity'] -and $null -ne $node.integrity) {
+                $node.integrity = New-AsarIntegrity $script:ai_new
+            }
+        }
+        $node.offset = [string]$script:ai_cursor
+        $script:ai_cursor += $newSize
+    }
+    Walk-Assign2 $header ''
+
+    $json      = $header | ConvertTo-Json -Depth 100 -Compress
+    $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $padLen       = (4 - ($jsonBytes.Length % 4)) % 4
+    $headerBufLen = 8 + $jsonBytes.Length + $padLen
+    $payloadSize  = 4 + $jsonBytes.Length + $padLen
+
+    $ms = New-Object System.IO.MemoryStream
+    $bw = New-Object System.IO.BinaryWriter($ms)
+    $bw.Write([uint32]4)
+    $bw.Write([uint32]$headerBufLen)
+    $bw.Write([uint32]$payloadSize)
+    $bw.Write([uint32]$jsonBytes.Length)
+    $bw.Write($jsonBytes)
+    if ($padLen -gt 0) { $bw.Write((New-Object byte[] $padLen)) }
+
+    function Walk-Write($node, [string]$path) {
+        if ($node.PSObject.Properties['files']) {
+            foreach ($p in $node.files.PSObject.Properties) {
+                $child = if ($path) { $path + '/' + $p.Name } else { $p.Name }
+                Walk-Write $p.Value $child
+            }
+            return
+        }
+        if ($node.PSObject.Properties['link'] -and $null -ne $node.link) { return }
+        if ($node.PSObject.Properties['unpacked'] -and $node.unpacked) { return }
+        if (-not ($node.PSObject.Properties['offset'])) { return }
+        $size = [int]$node.size
+        if ($path -eq $script:ai_rel) {
+            $bw.Write($script:ai_new)
+        } elseif ($size -gt 0) {
+            $srcOff = $asar.contentBase + [long]$script:ai_map[$path]
+            $chunk = New-Object byte[] $size
+            [Array]::Copy($asar.bytes, $srcOff, $chunk, 0, $size)
+            $bw.Write($chunk)
+        }
+    }
+    Walk-Write $header ''
+    $bw.Flush()
+    [System.IO.File]::WriteAllBytes($outPath, $ms.ToArray())
+    $bw.Dispose(); $ms.Dispose()
+}
+
 # ================= main =================
 if ($TargetDir) {
     $resourcesDir = $TargetDir
@@ -268,13 +405,50 @@ if (-not $TargetDir) {
     }
 }
 
-# 1) source icon: prefer the PNG (largest, no frame loss), fall back to the .ico
+# 1) source icon: interactive picker over icon\ (PNG preferred, .ico as fallback),
+#    or pass -IconPath to skip the menu entirely
 if (-not $IconPath) {
-    $pngCandidate = Join-Path $iconDir 'app-icon.png'
-    if (Test-Path -LiteralPath $pngCandidate) {
-        $IconPath = $pngCandidate
+    $choices = New-Object System.Collections.ArrayList
+    $pngNames = @{}
+    if (Test-Path -LiteralPath $iconDir) {
+        foreach ($f in (Get-ChildItem -LiteralPath $iconDir -File | Where-Object { $_.Extension -ieq '.png' })) {
+            $pngNames[$f.BaseName] = $true
+        }
+    }
+    $preferred = Join-Path $iconDir 'app-icon.png'
+    if (Test-Path -LiteralPath $preferred) { [void]$choices.Add((Get-Item -LiteralPath $preferred)) }
+    if (Test-Path -LiteralPath $iconDir) {
+        foreach ($f in (Get-ChildItem -LiteralPath $iconDir -File | Sort-Object Name)) {
+            if ($f.Name -eq 'app-icon.png' -or $f.Name -eq 'app-icon-original.ico') { continue }
+            if ($f.Extension -ieq '.png') { [void]$choices.Add($f); continue }
+            # an .ico is only listed when it has no same-named .png companion
+            if ($f.Extension -ieq '.ico' -and -not $pngNames.ContainsKey($f.BaseName)) { [void]$choices.Add($f) }
+        }
+    }
+    if ($choices.Count -gt 0) {
+        Write-Host ''
+        Write-Host '===== choose an app icon ====='
+        for ($i = 0; $i -lt $choices.Count; $i++) {
+            $label = $choices[$i].BaseName
+            if ($label -eq 'app-icon') { $label = 'app-icon (blue whale, default)' }
+            elseif ($label -eq 'app-icon-alt-black') { $label = 'app-icon-alt-black (black whale)' }
+            Write-Host ("  [{0}] {1}  ({2})" -f ($i + 1), $label, $choices[$i].Extension.TrimStart('.').ToUpperInvariant())
+        }
+        Write-Host '  [0] custom path'
+        $sel = Read-Host 'number [default 1]'
+        if ($sel -eq '0') {
+            $IconPath = Read-Host 'full path of the .ico / .png to install'
+        } elseif ($sel -match '^\d+$' -and [int]$sel -ge 1 -and [int]$sel -le $choices.Count) {
+            $IconPath = $choices[[int]$sel - 1].FullName
+        } elseif (-not $sel) {
+            $IconPath = $choices[0].FullName
+        } else {
+            Write-Host "[X] invalid selection: $sel" -ForegroundColor Red
+            Read-Host 'Press Enter to exit'
+            exit 1
+        }
     } else {
-        $IconPath = Join-Path $iconDir 'app-icon.ico'
+        $IconPath = Read-Host 'full path of the .ico / .png to install'
     }
 }
 if (-not (Test-Path -LiteralPath $IconPath)) {
@@ -335,7 +509,20 @@ $trayPath = Join-Path $resourcesDir 'tray_icon.ico'
 Save-IconBackup 'tray_icon.ico'
 [System.IO.File]::WriteAllBytes("$trayPath.tmp", $icoBytes)
 Move-Item -Force "$trayPath.tmp" $trayPath
-Write-Host "[3/5] tray_icon.ico written ($([Math]::Round($icoBytes.Length / 1KB, 1)) KB, multi-size)"
+Write-Host "[3/6] tray_icon.ico written ($([Math]::Round($icoBytes.Length / 1KB, 1)) KB, multi-size)"
+
+# Shortcuts get a CONTENT-HASHED copy instead of tray_icon.ico: Explorer keys its
+# icon cache on the path, so re-painting the same file name (blue -> black) keeps
+# showing the old bitmap until the cache is rebuilt. A new path per content hash
+# always resolves to the new image.
+$hash8 = (Get-Sha256 $icoBytes).Substring(0, 8).ToLowerInvariant()
+$shortcutIcon = Join-Path $resourcesDir "zcode-icon-$hash8.ico"
+[System.IO.File]::WriteAllBytes("$shortcutIcon.tmp", $icoBytes)
+Move-Item -Force "$shortcutIcon.tmp" $shortcutIcon
+Get-ChildItem -LiteralPath $resourcesDir -Filter 'zcode-icon-*.ico' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -ne "zcode-icon-$hash8.ico" } |
+    ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue }
+Write-Host "[3/6] shortcut icon: zcode-icon-$hash8.ico"
 
 $winSize = [Math]::Min(512, $srcBmp.Width)
 $winBmp = Resize-Bitmap $srcBmp $winSize $winSize
@@ -347,7 +534,7 @@ $winMs.Dispose()
 Save-IconBackup 'icon_windows.png'
 [System.IO.File]::WriteAllBytes("$winPath.tmp", $winBytes)
 Move-Item -Force "$winPath.tmp" $winPath
-Write-Host "[4/5] icon_windows.png written (${winSize}x${winSize})"
+Write-Host "[4/6] icon_windows.png written (${winSize}x${winSize})"
 
 # resources\icon.png is a third Windows consumer: the About window
 # (resolveAboutIconPath) and the drag helper (resolveZCodeIcon -> 64px data URL).
@@ -355,9 +542,114 @@ $appPngPath = Join-Path $resourcesDir 'icon.png'
 Save-IconBackup 'icon.png'
 [System.IO.File]::WriteAllBytes("$appPngPath.tmp", $winBytes)
 Move-Item -Force "$appPngPath.tmp" $appPngPath
-Write-Host "[4/5] icon.png written (${winSize}x${winSize})"
+Write-Host "[4/6] icon.png written (${winSize}x${winSize})"
 
-# 4) shortcuts: point IconLocation at the new .ico (ZCode.exe itself untouched)
+# ---- 4b) sidebar logo (renderer) ------------------------------------------------
+# The top-left "Z" in the sidebar is an inline <svg viewBox="0 0 256 218"> drawn
+# by the renderer bundle, not a resources file. A CSS block with its own markers
+# (ZCODE-APPICON-*) hides its paths and paints the chosen icon as the svg box's
+# background, so no JavaScript bundle is touched.
+$markerBegin = '/* ZCODE-APPICON-PATCH-BEGIN */'
+$markerEnd   = '/* ZCODE-APPICON-PATCH-END */'
+$asarPath = Join-Path $resourcesDir 'app.asar'
+$logoApplied = $false
+if (Test-Path -LiteralPath $asarPath) {
+    $asar = Read-Asar $asarPath
+    $cssRel = Resolve-RendererCss $asar
+    $cssHit = Get-CssEntryAndBytes $asar $cssRel
+    if (-not $cssHit) { throw "renderer css not found in this ZCode build ($cssRel). Refusing." }
+    $cssText = [System.Text.Encoding]::UTF8.GetString($cssHit.bytes)
+    $cB = Count-Str $cssText $markerBegin
+    $cE = Count-Str $cssText $markerEnd
+    if ($cB -eq 0 -and $cE -eq 0) {
+        $cleanText = $cssText
+    } elseif ($cB -eq 1 -and $cE -eq 1 -and $cssText.IndexOf($markerBegin) -lt $cssText.IndexOf($markerEnd)) {
+        $idx = $cssText.IndexOf($markerBegin)
+        $endIdx = $cssText.IndexOf($markerEnd) + $markerEnd.Length
+        $cleanText = ($cssText.Substring(0, $idx) + $cssText.Substring($endIdx))
+        if ($idx -gt 0 -and $cleanText[$idx - 1] -eq [char]10) {
+            $cleanText = $cleanText.Substring(0, $idx - 1) + $cleanText.Substring($idx)
+        }
+    } else {
+        throw 'app.asar contains a broken app-icon block; run restore-zcode-icon.bat first. Refusing.'
+    }
+    $b64 = [Convert]::ToBase64String($winBytes)
+    # average luminance of the opaque pixels: the sidebar sits on a dark brand
+    # chip, so a dark icon is drawn as a light silhouette there (like the
+    # original Z) while a bright icon keeps its colour.
+    $lum = 0.5
+    try {
+        $sum = 0.0; $n = 0
+        $stepX = [Math]::Max(1, [int]($srcBmp.Width / 64))
+        $stepY = [Math]::Max(1, [int]($srcBmp.Height / 64))
+        for ($yy = 0; $yy -lt $srcBmp.Height; $yy += $stepY) {
+            for ($xx = 0; $xx -lt $srcBmp.Width; $xx += $stepX) {
+                $c = $srcBmp.GetPixel($xx, $yy)
+                if ($c.A -lt 32) { continue }
+                $sum += (0.2126 * $c.R + 0.7152 * $c.G + 0.0722 * $c.B) / 255.0
+                $n++
+            }
+        }
+        if ($n -gt 0) { $lum = $sum / $n }
+    } catch {}
+    $useMono = ($SidebarStyle -eq 'mono') -or (($SidebarStyle -eq 'auto') -and ($lum -lt 0.45))
+    if ($useMono) {
+        $sidebarRule = @"
+svg[viewBox="0 0 256 218"]{
+background-color:currentColor!important;
+background-image:none!important;
+-webkit-mask-image:url("data:image/png;base64,$b64");
+mask-image:url("data:image/png;base64,$b64");
+-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;
+-webkit-mask-position:center;mask-position:center;
+-webkit-mask-size:contain;mask-size:contain;
+filter:none!important;
+}
+"@
+        $sidebarMode = 'mono (theme-coloured silhouette)'
+    } else {
+        $halo = if ($lum -lt 0.45) { '0 0 2px rgba(255,255,255,0.85)' } else { 'none' }
+        $sidebarRule = @"
+svg[viewBox="0 0 256 218"]{
+background-image:url("data:image/png;base64,$b64")!important;
+background-repeat:no-repeat;background-position:center;background-size:contain!important;
+filter:drop-shadow($halo)!important;
+}
+"@
+        $sidebarMode = 'colour'
+    }
+    $block = @"
+$markerBegin
+/* Sidebar corner logo: hide the bundled Z paths and paint the chosen icon.
+   auto: dark icon -> light silhouette; bright icon -> original colour. */
+$sidebarRule
+svg[viewBox="0 0 256 218"]>path{display:none!important}
+$markerEnd
+"@
+    $cleanBytes = [System.Text.Encoding]::UTF8.GetBytes($cleanText)
+    $blockBytes = [System.Text.Encoding]::UTF8.GetBytes($block)
+    $patchedCss = New-Object byte[] ($cleanBytes.Length + 1 + $blockBytes.Length)
+    [Array]::Copy($cleanBytes, 0, $patchedCss, 0, $cleanBytes.Length)
+    $patchedCss[$cleanBytes.Length] = 0x0A
+    [Array]::Copy($blockBytes, 0, $patchedCss, $cleanBytes.Length + 1, $blockBytes.Length)
+
+    $tmpPath = "$asarPath.tmp"
+    Write-Asar $asar $cssRel $patchedCss $tmpPath
+    $tmpAsar = Read-Asar $tmpPath
+    $tmpHit = Get-CssEntryAndBytes $tmpAsar $cssRel
+    $tmpText = if ($tmpHit) { [System.Text.Encoding]::UTF8.GetString($tmpHit.bytes) } else { '' }
+    if (-not $tmpHit -or (Count-Str $tmpText $markerBegin) -ne 1 -or (Count-Str $tmpText $markerEnd) -ne 1) {
+        Remove-Item $tmpPath -ErrorAction SilentlyContinue
+        throw 'rebuilt asar failed self-check (app-icon block); original untouched.'
+    }
+    Move-Item -Force $tmpPath $asarPath
+    $logoApplied = $true
+    Write-Host ("[5/6] sidebar logo patched (app.asar css block, " + $sidebarMode + ")")
+} else {
+    Write-Host '[5/6] sidebar logo skipped (no app.asar in the target dir)'
+}
+
+# 5) shortcuts: point IconLocation at the new .ico (ZCode.exe itself untouched)
 $shortcutRecords = New-Object System.Collections.ArrayList
 $doShortcuts = (-not $NoShortcuts) -and ((-not $TargetDir) -or $WithShortcuts)
 if ($doShortcuts -and $zcodeExe -eq $null -and -not $TargetDir) { $zcodeExe = $null }
@@ -370,14 +662,34 @@ if ($doShortcuts) {
     }
     if ($exeForMatch) {
         $wsh = New-Object -ComObject WScript.Shell
-        $newIcon = "$trayPath,0"
+        $newIcon = "$shortcutIcon,0"
+        # keep the FIRST recorded original across re-runs (otherwise a second
+        # colour switch would record our own path as the "original")
+        $priorOriginals = @{}
+        if (Test-Path -LiteralPath $statePath) {
+            try {
+                $prior = Get-Content -LiteralPath $statePath -Raw -Encoding UTF8 | ConvertFrom-Json
+                foreach ($rec in @($prior.shortcuts)) {
+                    if ($rec -and $rec.path -and $rec.original) { $priorOriginals[$rec.path] = $rec.original }
+                }
+            } catch {}
+        }
         foreach ($lnkPath in (Get-ZCodeShortcuts $exeForMatch)) {
             try {
                 $lnk = $wsh.CreateShortcut($lnkPath)
                 $target = $lnk.TargetPath
                 if (-not $target -or ($target -ine $exeForMatch)) { continue }
-                if ($lnk.IconLocation -ieq $newIcon) { continue }
-                $orig = $lnk.IconLocation
+                if ($lnk.IconLocation -ieq $newIcon) {
+                    # identical icon path (same colour re-run): just bump the
+                    # .lnk write time so the shell re-reads it
+                    $lnk.Save()
+                    if ($priorOriginals.ContainsKey($lnkPath)) {
+                        [void]$shortcutRecords.Add(@{ path = $lnkPath; original = $priorOriginals[$lnkPath]; applied = $newIcon })
+                    }
+                    Write-Host "      shortcut refreshed (cache bust): $lnkPath"
+                    continue
+                }
+                $orig = if ($priorOriginals.ContainsKey($lnkPath)) { $priorOriginals[$lnkPath] } else { $lnk.IconLocation }
                 $lnk.IconLocation = $newIcon
                 $lnk.Save()
                 [void]$shortcutRecords.Add(@{ path = $lnkPath; original = $orig; applied = $newIcon })
@@ -388,7 +700,7 @@ if ($doShortcuts) {
         }
     }
 } else {
-    Write-Host '[5/5] shortcuts skipped'
+    Write-Host '[6/6] shortcuts skipped'
 }
 
 # 5) state + shell refresh
@@ -403,7 +715,12 @@ $state = [ordered]@{
 }
 ($state | ConvertTo-Json -Depth 6) | Set-Content -LiteralPath $statePath -Encoding UTF8
 if ($doShortcuts) { Invoke-ShellIconRefresh }
-Write-Host "[5/5] state saved: $(Split-Path $statePath -Leaf)"
+if ($RestartExplorer) {
+    Write-Host 'restarting explorer.exe to clear the shell icon cache...'
+    try { Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2 } catch {}
+    try { Start-Process explorer.exe } catch {}
+}
+Write-Host "[6/6] state saved: $(Split-Path $statePath -Leaf)"
 $srcBmp.Dispose()
 
 if ($NoRestart) {

@@ -178,6 +178,141 @@ function Invoke-ShellIconRefresh {
     }
 }
 
+# ---- asar primitives (self-contained, same code as the patch script) --------------
+function Count-Str([string]$hay, [string]$s) {
+    return ([regex]::Matches($hay, [regex]::Escape($s))).Count
+}
+function Hash-Bytes([byte[]]$b) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { return (($sha.ComputeHash($b) | ForEach-Object { $_.ToString('X2') }) -join '') } finally { $sha.Dispose() }
+}
+function Read-Asar([string]$path) {
+    $bytes = [System.IO.File]::ReadAllBytes($path)
+    $hdrTotal = [BitConverter]::ToUInt32($bytes, 4)
+    $jsonLen  = [BitConverter]::ToUInt32($bytes, 12)
+    $json     = [System.Text.Encoding]::UTF8.GetString($bytes, 16, [int]$jsonLen)
+    return @{
+        bytes       = $bytes
+        header      = ($json | ConvertFrom-Json)
+        contentBase = 8 + [int]$hdrTotal
+    }
+}
+function Resolve-RendererCss($asar) {
+    $assets = $asar.header.files.out.files.renderer.files.assets
+    $hits = @()
+    foreach ($p in $assets.files.PSObject.Properties) {
+        if ($p.Name -like 'styles-*.css' -and -not $p.Value.unpacked -and -not $p.Value.link) { $hits += $p.Name }
+    }
+    if ($hits.Count -eq 1) { return "out/renderer/assets/$($hits[0])" }
+    throw "cannot identify the renderer stylesheet in this ZCode build (styles-*.css hits: $($hits.Count)). Version changed? Refusing."
+}
+function Get-CssEntryAndBytes($asar, [string]$relPath) {
+    $parts = $relPath -split '/'
+    $node = $asar.header
+    $last = $parts[-1]
+    foreach ($seg in ($parts | Select-Object -First ($parts.Count - 1))) {
+        if (-not $node.files -or -not $node.files.PSObject.Properties[$seg]) { return $null }
+        $node = $node.files.$seg
+    }
+    if (-not $node.files -or -not $node.files.PSObject.Properties[$last]) { return $null }
+    $file = $node.files.$last
+    if ($file.unpacked -or $file.link) { return $null }
+    $len = [int]$file.size
+    $off = [long]$file.offset
+    $bytes = New-Object byte[] $len
+    [Array]::Copy($asar.bytes, $asar.contentBase + $off, $bytes, 0, $len)
+    return @{ node = $file; bytes = $bytes }
+}
+function New-AsarIntegrity([byte[]]$bytes) {
+    $blocks = New-Object System.Collections.Generic.List[string]
+    $blockSize = 4194304
+    for ($off = 0; $off -lt $bytes.Length; $off += $blockSize) {
+        $len = [Math]::Min($blockSize, $bytes.Length - $off)
+        $chunk = New-Object byte[] $len
+        [Array]::Copy($bytes, $off, $chunk, 0, $len)
+        [void]$blocks.Add((Hash-Bytes $chunk).ToLowerInvariant())
+    }
+    return @{
+        algorithm = 'SHA256'
+        hash      = (Hash-Bytes $bytes).ToLowerInvariant()
+        blockSize = $blockSize
+        blocks    = $blocks.ToArray()
+    }
+}
+function Write-Asar($asar, [string]$relPath, [byte[]]$newBytes, [string]$outPath) {
+    $header = ($asar.header | ConvertTo-Json -Depth 100 -Compress) | ConvertFrom-Json
+    $script:ai_rel = $relPath
+    $script:ai_new = $newBytes
+    $script:ai_cursor = 0L
+    $script:ai_map = @{}
+    function Walk-Assign2($node, [string]$path) {
+        if ($node.PSObject.Properties['files']) {
+            foreach ($p in $node.files.PSObject.Properties) {
+                $child = if ($path) { $path + '/' + $p.Name } else { $p.Name }
+                Walk-Assign2 $p.Value $child
+            }
+            return
+        }
+        if ($node.PSObject.Properties['link'] -and $null -ne $node.link) { return }
+        if ($node.PSObject.Properties['unpacked'] -and $node.unpacked) { return }
+        if (-not ($node.PSObject.Properties['offset'])) { return }
+        $script:ai_map[$path] = [long]$node.offset
+        $size = [long]$node.size
+        $newSize = $size
+        if ($path -eq $script:ai_rel) {
+            $newSize = [long]$script:ai_new.Length
+            $node.size = $newSize
+            if ($node.PSObject.Properties['integrity'] -and $null -ne $node.integrity) {
+                $node.integrity = New-AsarIntegrity $script:ai_new
+            }
+        }
+        $node.offset = [string]$script:ai_cursor
+        $script:ai_cursor += $newSize
+    }
+    Walk-Assign2 $header ''
+
+    $json      = $header | ConvertTo-Json -Depth 100 -Compress
+    $jsonBytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $padLen       = (4 - ($jsonBytes.Length % 4)) % 4
+    $headerBufLen = 8 + $jsonBytes.Length + $padLen
+    $payloadSize  = 4 + $jsonBytes.Length + $padLen
+
+    $ms = New-Object System.IO.MemoryStream
+    $bw = New-Object System.IO.BinaryWriter($ms)
+    $bw.Write([uint32]4)
+    $bw.Write([uint32]$headerBufLen)
+    $bw.Write([uint32]$payloadSize)
+    $bw.Write([uint32]$jsonBytes.Length)
+    $bw.Write($jsonBytes)
+    if ($padLen -gt 0) { $bw.Write((New-Object byte[] $padLen)) }
+
+    function Walk-Write($node, [string]$path) {
+        if ($node.PSObject.Properties['files']) {
+            foreach ($p in $node.files.PSObject.Properties) {
+                $child = if ($path) { $path + '/' + $p.Name } else { $p.Name }
+                Walk-Write $p.Value $child
+            }
+            return
+        }
+        if ($node.PSObject.Properties['link'] -and $null -ne $node.link) { return }
+        if ($node.PSObject.Properties['unpacked'] -and $node.unpacked) { return }
+        if (-not ($node.PSObject.Properties['offset'])) { return }
+        $size = [int]$node.size
+        if ($path -eq $script:ai_rel) {
+            $bw.Write($script:ai_new)
+        } elseif ($size -gt 0) {
+            $srcOff = $asar.contentBase + [long]$script:ai_map[$path]
+            $chunk = New-Object byte[] $size
+            [Array]::Copy($asar.bytes, $srcOff, $chunk, 0, $size)
+            $bw.Write($chunk)
+        }
+    }
+    Walk-Write $header ''
+    $bw.Flush()
+    [System.IO.File]::WriteAllBytes($outPath, $ms.ToArray())
+    $bw.Dispose(); $ms.Dispose()
+}
+
 # ================= main =================
 if ($TargetDir) {
     $resourcesDir = $TargetDir
@@ -210,13 +345,13 @@ $trayPath = Join-Path $resourcesDir 'tray_icon.ico'
 $backupTray = Join-Path $backupDir 'tray_icon.ico'
 if ((-not $Factory) -and (Test-Path -LiteralPath $backupTray)) {
     Copy-Item -LiteralPath $backupTray -Destination $trayPath -Force
-    Write-Host '[1/5] tray_icon.ico restored from app-icon-backup'
+    Write-Host '[1/6] tray_icon.ico restored from app-icon-backup'
 } else {
     # resources\icon.png is NOT a valid baseline here: the patch overwrites it.
     if (-not (Test-Path -LiteralPath $factoryIco)) {
         throw 'no backup and no factory baseline (icon\app-icon-original.ico). Reinstall ZCode or restore its icons, then run patch-zcode-icon.ps1 once to rebuild the baseline.'
     }
-    Write-Host '[1/5] backup missing: rebuilding from icon\app-icon-original.ico'
+    Write-Host '[1/6] backup missing: rebuilding from icon\app-icon-original.ico'
     $fb = Load-SourceBitmap $factoryIco
     try { [System.IO.File]::WriteAllBytes("$trayPath.tmp", (New-IcoBytes $fb)) } finally { $fb.Dispose() }
     Move-Item -Force "$trayPath.tmp" $trayPath
@@ -227,7 +362,7 @@ $winPath = Join-Path $resourcesDir 'icon_windows.png'
 $backupWin = Join-Path $backupDir 'icon_windows.png'
 if ((-not $Factory) -and (Test-Path -LiteralPath $backupWin)) {
     Copy-Item -LiteralPath $backupWin -Destination $winPath -Force
-    Write-Host '[2/5] icon_windows.png restored from app-icon-backup'
+    Write-Host '[2/6] icon_windows.png restored from app-icon-backup'
 } else {
     if (-not (Test-Path -LiteralPath $factoryIco)) {
         throw 'no backup and no factory baseline (icon\app-icon-original.ico). Reinstall ZCode or restore its icon.png, then run patch-zcode-icon.ps1 once to rebuild the baseline.'
@@ -239,7 +374,7 @@ if ((-not $Factory) -and (Test-Path -LiteralPath $backupWin)) {
         try { $out.Save("$winPath.tmp", [System.Drawing.Imaging.ImageFormat]::Png) } finally { $out.Dispose() }
     } finally { $fb.Dispose() }
     Move-Item -Force "$winPath.tmp" $winPath
-    Write-Host '[2/5] icon_windows.png rebuilt from the factory baseline'
+    Write-Host '[2/6] icon_windows.png rebuilt from the factory baseline'
 }
 
 # 3) app icon png (About window + drag helper); rebuilt at the factory 1024 when
@@ -248,7 +383,7 @@ $appPngPath = Join-Path $resourcesDir 'icon.png'
 $backupApp = Join-Path $backupDir 'icon.png'
 if ((-not $Factory) -and (Test-Path -LiteralPath $backupApp)) {
     Copy-Item -LiteralPath $backupApp -Destination $appPngPath -Force
-    Write-Host '[3/5] icon.png restored from app-icon-backup'
+    Write-Host '[3/6] icon.png restored from app-icon-backup'
 } else {
     if (-not (Test-Path -LiteralPath $factoryIco)) {
         throw 'no backup and no factory baseline (icon\app-icon-original.ico) for icon.png. Refusing.'
@@ -260,10 +395,51 @@ if ((-not $Factory) -and (Test-Path -LiteralPath $backupApp)) {
         try { $out.Save("$appPngPath.tmp", [System.Drawing.Imaging.ImageFormat]::Png) } finally { $out.Dispose() }
     } finally { $fb.Dispose() }
     Move-Item -Force "$appPngPath.tmp" $appPngPath
-    Write-Host '[3/5] icon.png rebuilt from the factory baseline'
+    Write-Host '[3/6] icon.png rebuilt from the factory baseline'
 }
 
-# 4) shortcuts (only when they still carry the value this patch wrote)
+# 4) sidebar logo: strip the CSS block this patch appended to the renderer stylesheet
+$markerBegin = '/* ZCODE-APPICON-PATCH-BEGIN */'
+$markerEnd   = '/* ZCODE-APPICON-PATCH-END */'
+$asarPath = Join-Path $resourcesDir 'app.asar'
+if (Test-Path -LiteralPath $asarPath) {
+    $asar = Read-Asar $asarPath
+    $cssRel = Resolve-RendererCss $asar
+    $hit = Get-CssEntryAndBytes $asar $cssRel
+    if ($hit) {
+        $text = [System.Text.Encoding]::UTF8.GetString($hit.bytes)
+        $cB = Count-Str $text $markerBegin
+        $cE = Count-Str $text $markerEnd
+        if ($cB -eq 0 -and $cE -eq 0) {
+            Write-Host '[4/6] sidebar logo: no block present'
+        } elseif ($cB -eq 1 -and $cE -eq 1 -and $text.IndexOf($markerBegin) -lt $text.IndexOf($markerEnd)) {
+            $idx = $text.IndexOf($markerBegin)
+            $endIdx = $text.IndexOf($markerEnd) + $markerEnd.Length
+            $clean = ($text.Substring(0, $idx) + $text.Substring($endIdx))
+            if ($idx -gt 0 -and $clean[$idx - 1] -eq [char]10) {
+                $clean = $clean.Substring(0, $idx - 1) + $clean.Substring($idx)
+            }
+            $cleanBytes = [System.Text.Encoding]::UTF8.GetBytes($clean)
+            $tmpPath = "$asarPath.tmp"
+            Write-Asar $asar $cssRel $cleanBytes $tmpPath
+            $tmpAsar = Read-Asar $tmpPath
+            $tmpHit = Get-CssEntryAndBytes $tmpAsar $cssRel
+            $tmpText = if ($tmpHit) { [System.Text.Encoding]::UTF8.GetString($tmpHit.bytes) } else { '' }
+            if (-not $tmpHit -or (Count-Str $tmpText $markerBegin) -ne 0 -or (Count-Str $tmpText $markerEnd) -ne 0) {
+                Remove-Item $tmpPath -ErrorAction SilentlyContinue
+                throw 'rebuilt asar failed self-check (app-icon block still present); original untouched.'
+            }
+            Move-Item -Force $tmpPath $asarPath
+            Write-Host '[4/6] sidebar logo reverted (css block stripped)'
+        } else {
+            throw 'app.asar contains a broken app-icon block (only one marker). Re-run patch-zcode-icon.ps1, then restore again.'
+        }
+    }
+} else {
+    Write-Host '[4/6] sidebar logo skipped (no app.asar in the target dir)'
+}
+
+# 5) shortcuts (only when they still carry the value this patch wrote)
 $reverted = 0
 if (Test-Path -LiteralPath $statePath) {
     try {
@@ -292,9 +468,12 @@ if (Test-Path -LiteralPath $statePath) {
 } else {
     Write-Host '      no state file: shortcuts left as-is'
 }
-Write-Host "[4/5] shortcuts reverted: $reverted"
+Write-Host "[5/6] shortcuts reverted: $reverted"
+# drop the content-hashed shortcut copies written by the patch
+Get-ChildItem -LiteralPath $resourcesDir -Filter 'zcode-icon-*.ico' -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force -ErrorAction SilentlyContinue
 if (-not $TargetDir) { Invoke-ShellIconRefresh }
-Write-Host '[5/5] done'
+Write-Host '[6/6] done'
 
 if ($NoRestart) {
     Write-Host 'done (NoRestart: leave ZCode closed).'
