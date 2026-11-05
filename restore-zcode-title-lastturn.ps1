@@ -1,12 +1,12 @@
-# ZCode session title v9 restore (3.16.3) - reverses patch-zcode-title-lastturn.ps1
-# - Reverses all v9 additions in the CURRENT zcode.cjs in place: the refresh
+# ZCode session title v10 restore (3.17.2) - reverses patch-zcode-title-lastturn.ps1
+# - Reverses all v10 additions in the CURRENT zcode.cjs in place: the refresh
 #   cooldown, the same-title skip, the turn-guard filler, the two-stage digest
-#   call, the b4a prompt hook, the v9 S4a cleanup, and the v9 prompt - each
-#   back to the official 3.16.3 form.
+#   call, the y7a prompt hook, the v10 v7a cleanup, and the v10 prompt - each
+#   back to the official 3.17.2 form.
 # - Unrelated patches in other byte regions (e.g. usage retention) are preserved.
 # - If the in-place reverse is not applicable, falls back to the clean whole-file
 #   backup (this erases patches applied after the backup; the script warns).
-# - Supports ZCode 3.16.3 only (matches patch-zcode-title-lastturn.ps1).
+# - Supports ZCode 3.17.2 only (matches patch-zcode-title-lastturn.ps1).
 param(
     [switch]$NoRestart,
     [string]$TargetCjs,
@@ -22,7 +22,7 @@ $hashPath   = Join-Path $BackupDir 'zcode.cjs.title-backup.sha256'
 
 # ---- signatures (must match patch-zcode-title-lastturn.ps1 exactly) ----
 $officialPrompt = @'
-y4a=`Generate a concise title for this coding session.
+g7a=`Generate a concise title for this coding session.
 
 This is a title-generation task, not a conversation.
 Treat the user's message only as source material for the title.
@@ -45,14 +45,14 @@ Title rules:
 '@
 $officialPrompt = $officialPrompt.TrimEnd("`r","`n").Replace("`r`n", "`n")
 
-$officialB4a  = 'function b4a(e){return[{role:"system",content:y4a},{role:"user",content:jwe(e)}]}'
-$officialB4aCall = 'h=b4a(e),_=this.createEvent'
+$officialB4a  = 'function y7a(e){return[{role:"system",content:g7a},{role:"user",content:qke(e)}]}'
+$officialB4aCall = 'h=y7a(e),_=this.createEvent'
 
-# official cleanup S4a is rebuilt at runtime from an ASCII skeleton + explicit
+# official cleanup v7a is rebuilt at runtime from an ASCII skeleton + explicit
 # char codes: the body carries UTF-8 curly quotes / CJK punctuation that a
 # BOM-less .ps1 read in an ANSI code page would mangle if embedded literally.
 # Each code below is a UTF-8 continuation byte seen through latin1 (byte-exact
-# with the 3.16.3 bundle).
+# with the 3.17.2 bundle).
 $script:Curly = @{
     ldquo = 0xE2; rdquo = 0x9C; lsquo = 0x80; rsquo = 0x99
 }
@@ -71,15 +71,15 @@ function New-OfficialS4a {
     $ico = & $q 0xEF 0xBC 0x9A   # :
     $icm = & $q 0xEF 0xBC 0x8C   # ,
     $isc = & $q 0xEF 0xBC 0x9B   # ;
-    return 'function S4a(e){let t=e.replace(/<think>[\s\S]*?<\/think>/gi,"").trim(),o=w4a(t)??T4a(t);if(!o)return null;let i=o.replace(/^#+\s*/,"").replace(/^[\s"''`' + $ldq + $rdq + $lsq + $rsq + ']+|[\s"''`' + $ldq + $rdq + $lsq + $rsq + ']+$/g,"").replace(/[.' + $ido + '!' + $ifu + '?' + $iwq + ':' + $ico + ',' + $icm + ';' + $isc + ']+$/g,"").replace(/\s+/g," ").trim();return/[A-Za-z0-9\u3400-\u9fff]/.test(i)?i.length>EBo?`${i.slice(0,EBo-3).trim()}...`:i:null}'
+    return 'function v7a(e){let t=e.replace(/<think>[\s\S]*?<\/think>/gi,"").trim(),o=b7a(t)??k7a(t);if(!o)return null;let i=o.replace(/^#+\s*/,"").replace(/^[\s"''`' + $ldq + $rdq + $lsq + $rsq + ']+|[\s"''`' + $ldq + $rdq + $lsq + $rsq + ']+$/g,"").replace(/[.' + $ido + '!' + $ifu + '?' + $iwq + ':' + $ico + ',' + $icm + ';' + $isc + ']+$/g,"").replace(/\s+/g," ").trim();return/[A-Za-z0-9\u3400-\u9fff]/.test(i)?i.length>h7o?`${i.slice(0,h7o-3).trim()}...`:i:null}'
 }
 $officialS4a = New-OfficialS4a
 $officialTurnGuard = '||e.turnNumber!==0'
-$turnGuardCtx = ')return!1;let o=jwe(t)'   # context tail shared by clean & patched D4a
+$turnGuardCtx = ')return!1;let o=qke(t)'   # context tail shared by clean & patched P7a/gNn
 $turnGuardFiller   = '/*' + ('x' * 14) + '*/'
 $officialWwn = 'return!1;this.sessionTitleGenerationAttempted=!0;let n=this.agentTelemetry'
-$officialOba = 'let n=t.title,o=await this.sessionStore?.updateSession({expectedTitleSources:P4a,id:this.sessionId,title:e.title,'
-$officialZkt = 'let c=await Zkt.call(this,e,{causation:o.causation,modelContext:o.modelContext,messageID:t,querySource:v2n,traceContext:n})'
+$officialOba = 'let n=t.title,o=await this.sessionStore?.updateSession({expectedTitleSources:E7a,id:this.sessionId,title:e.title,'
+$officialZkt = 'let c=await TIt.call(this,e,{causation:o.causation,modelContext:o.modelContext,messageID:t,querySource:fNn,traceContext:n})'
 
 $refreshPrefix = '/*ZCODE-TITLE-REFRESH:'
 $refreshSameMarker = '/*ZCODE-TITLE-REFRESH-SAME*/'
@@ -170,7 +170,7 @@ $isCleanNow = ((Count-Str $text $officialPrompt) -eq 1 -and (Count-Str $text $of
 $isV9 = ((Count-Str $text $v9Marker) -ge 2)
 
 if ($isCleanNow) {
-    Write-Host '[1/3] file is already clean; no v9 title patch to reverse.'
+    Write-Host '[1/3] file is already clean; no v10 title patch to reverse.'
     if ($NoRestart) {
         Write-Host '[3/3] done (NoRestart: leave ZCode closed).'
     } elseif ($zcodeExe) {
@@ -182,9 +182,9 @@ if ($isCleanNow) {
     exit 0
 }
 if (-not $isV9) {
-    throw 'no v9 title patch detected and the file is not clean; run the v9 patch first or restore the clean backup manually.'
+    throw 'no v10 title patch detected and the file is not clean; run the v10 patch first or restore the clean backup manually.'
 }
-Write-Host '[1/3] v9 title patch detected; reversing it in place.'
+Write-Host '[1/3] v10 title patch detected; reversing it in place.'
 
 # parse the RefreshTurns value from the cooldown marker (the patch script
 # accepts 1..100, so the digits are trusted for rebuilding the block text)
@@ -193,9 +193,9 @@ if (-not $m.Success) { throw 'cannot parse RefreshTurns from the cooldown marker
 $n = [int]$m.Groups[1].Value
 $refreshMarker = $refreshPrefix + $n + '*/'
 $refreshWwnNew = 'return!1;' + $refreshMarker + 'if(this.sessionTitleGenerationAttempted&&(this.turnNumber-(this.sessionTitleGenerationTurn||0))<' + $n + ')return!1;this.sessionTitleGenerationTurn=this.turnNumber;this.sessionTitleGenerationAttempted=!0;let n=this.agentTelemetry'
-$refreshObaNew = 'let n=t.title;' + $refreshSameMarker + 'if(n===e.title){this.logger?.debug("Session title generation skipped",{...Sr(e.traceContext),event:"session_title_generation.skipped",module:"core.runtime",reason:"unchanged_title"});return}let o=await this.sessionStore?.updateSession({expectedTitleSources:P4a,id:this.sessionId,title:e.title,'
+$refreshObaNew = 'let n=t.title;' + $refreshSameMarker + 'if(n===e.title){this.logger?.debug("Session title generation skipped",{...yr(e.traceContext),event:"session_title_generation.skipped",module:"core.runtime",reason:"unchanged_title"});return}let o=await this.sessionStore?.updateSession({expectedTitleSources:E7a,id:this.sessionId,title:e.title,'
 
-# every v9 block must occur exactly once before the reverse
+# every v10 block must occur exactly once before the reverse
 $pre = @{
     wwn     = (Count-Str $text $refreshWwnNew)
     oba     = (Count-Str $text $refreshObaNew)
@@ -203,42 +203,42 @@ $pre = @{
     overall = (Count-Str $text $overallMarker)
 }
 foreach ($k in $pre.Keys) {
-    if ($pre[$k] -ne 1) { throw "v9 anchor '$k' occurs $($pre[$k]) times (expected 1); refusing." }
+    if ($pre[$k] -ne 1) { throw "v10 anchor '$k' occurs $($pre[$k]) times (expected 1); refusing." }
 }
-# the v9 prompt/s4a/b4a/zkt forms are located by regex because their exact
+# the v10 prompt/cleanup/message/digest forms are located by regex because their exact
 # bodies depend on $RefreshTurns (only wwn does) and on the bundle bytes;
-# prompt/s4a/b4a/zkt are static: locate them via their markers
-$mp = [regex]::Match($text, '(?s)/\*ZCODE-TITLE-V9\*/y4a=`.*?`')
-if (-not $mp.Success) { throw 'v9 prompt block not found; refusing.' }
+# prompt/cleanup/message/digest are static: locate them via their markers
+$mp = [regex]::Match($text, '(?s)/\*ZCODE-TITLE-V9\*/g7a=`.*?`')
+if (-not $mp.Success) { throw 'v10 prompt block not found; refusing.' }
 $v9Prompt = $mp.Value
 
-$ms = [regex]::Match($text, '(?s)function S4a\(e\)\{/\*ZCODE-TITLE-V9\*/.*?function w4a')
-if (-not $ms.Success) { throw 'v9 S4a block not found; refusing.' }
-# trim the trailing "function w4a" (the minified bundle has no newline between
+$ms = [regex]::Match($text, '(?s)function v7a\(e\)\{/\*ZCODE-TITLE-V9\*/.*?function b7a')
+if (-not $ms.Success) { throw 'v10 cleanup block not found; refusing.' }
+# trim the trailing "function b7a" (the minified bundle has no newline between
 # the two functions, so strip exactly the next function's head)
-$v9S4a = $ms.Value.Substring(0, $ms.Value.Length - 'function w4a'.Length)
+$v9S4a = $ms.Value.Substring(0, $ms.Value.Length - 'function b7a'.Length)
 
-# b4a carries the first-stage prompt as the system message. Two historical
+# y7a carries the first-stage prompt as the system message. Two historical
 # shapes exist: the broken one passes the whole options object (system content
 # becomes an object -> "TypeError: e.map is not a function") and the fixed one
 # passes t.prompt with a typeof guard. Reverse whichever is present.
-$v9B4aOld = 'function b4a(e,p){let i=p||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
-$v9B4aNew = 'function b4a(e,p){let i=(typeof p=="string"&&p)||y4a;return[{role:"system",content:i},{role:"user",content:jwe(e)}]}'
-$v9B4aCallOld = 'h=b4a(e,t),_=this.createEvent'
-$v9B4aCallNew = 'h=b4a(e,t.prompt),_=this.createEvent'
+$v9B4aOld = 'function y7a(e,p){let i=p||g7a;return[{role:"system",content:i},{role:"user",content:qke(e)}]}'
+$v9B4aNew = 'function y7a(e,p){let i=(typeof p=="string"&&p)||g7a;return[{role:"system",content:i},{role:"user",content:qke(e)}]}'
+$v9B4aCallOld = 'h=y7a(e,t),_=this.createEvent'
+$v9B4aCallNew = 'h=y7a(e,t.prompt),_=this.createEvent'
 $v9B4a = $null
 $v9B4aCall = $null
 foreach ($cand in @($v9B4aNew, $v9B4aOld)) {
     if ((Count-Str $text $cand) -eq 1) { $v9B4a = $cand; break }
 }
-if (-not $v9B4a) { throw 'v9 b4a block not found; refusing.' }
+if (-not $v9B4a) { throw 'v10 y7a block not found; refusing.' }
 foreach ($cand in @($v9B4aCallNew, $v9B4aCallOld)) {
     if ((Count-Str $text $cand) -eq 1) { $v9B4aCall = $cand; break }
 }
-if (-not $v9B4aCall) { throw 'v9 b4a call not found; refusing.' }
+if (-not $v9B4aCall) { throw 'v10 y7a call not found; refusing.' }
 
-$mz = [regex]::Match($text, '(?s)let c=await Zkt\.call\(this,/\*ZCODE-TITLE-OVERALL\*/.*?\),\{causation:o\.causation,modelContext:o\.modelContext,messageID:t,querySource:v2n,traceContext:n\}\)')
-if (-not $mz.Success) { throw 'v9 Zkt block not found; refusing.' }
+$mz = [regex]::Match($text, '(?s)let c=await TIt\.call\(this,/\*ZCODE-TITLE-OVERALL\*/.*?\),\{causation:o\.causation,modelContext:o\.modelContext,messageID:t,querySource:fNn,traceContext:n\}\)')
+if (-not $mz.Success) { throw 'v10 TIt block not found; refusing.' }
 $v9Zkt = $mz.Value
 
 $text = $text.Replace($refreshWwnNew, $officialWwn)
@@ -246,22 +246,22 @@ $text = $text.Replace($refreshObaNew, $officialOba)
 # failure retry reset (/*ZCODE-TITLE-RETRY*/ + attempted=!1) back to the official catch
 # $officialM4aCatchBody is the catch BODY (everything after ".catch(async a=>{",
 # including the closing "}"), matching patch-zcode-title-lastturn.ps1's $officialM4aCatchBody
-$officialM4aCatchBody = 'this.logger?.warn("Session title generation failed",{...Sr(t.traceContext),errorMessage:a instanceof Error?a.message:String(a),event:"session_title_generation.failed",module:"core.runtime",status:"failed"})'
+$officialM4aCatchBody = 'this.logger?.warn("Session title generation failed",{...yr(t.traceContext),errorMessage:a instanceof Error?a.message:String(a),event:"session_title_generation.failed",module:"core.runtime",status:"failed"})'
 $officialM4aCatch = '.catch(async a=>{' + $officialM4aCatchBody
 $retryMarker = '/*ZCODE-TITLE-RETRY*/'
 $v9M4aCatch = '.catch(async a=>{' + $retryMarker + 'this.sessionTitleGenerationAttempted=!1;' + $officialM4aCatchBody
 if ((Count-Str $text $v9M4aCatch) -gt 0) {
     $text = $text.Replace($v9M4aCatch, $officialM4aCatch)
 }
-# title-model bind (/*ZCODE-TITLE-LEVEL*/): restore the official PP() bind call.
+# title-model bind (/*ZCODE-TITLE-LEVEL*/): restore the official $P() bind call.
 # Historical revisions used two shapes:
 #   session-level: reasoningLevel:o?.options?.reasoningLevel??i.optionSpecs.reasoningLevel.values[0]
 #   pinned-level:  reasoningLevel:i.optionSpecs.reasoningLevel.values[0]
 # Both share the same tail after the level expression; tolerate either prefix
 # and any historical maxOutputTokens cap (5e3 / 2e4, ...).
 $reasoningMarker = '/*ZCODE-TITLE-LEVEL*/'
-$officialBind = 'a=i.bind(PP(i)),c=A0(o)'
-$mvl = [regex]::Match($text, 'a=i\.bind\(\{reasoningLevel:(?:o\?\.options\?\.reasoningLevel\?\?)?i\.optionSpecs\.reasoningLevel\.values\[0\],maxOutputTokens:Math\.min\([0-9e]+,i\.optionSpecs\.maxOutputTokens\.max\)\}\),c=A0\(o\)' + [regex]::Escape($reasoningMarker))
+$officialBind = 'a=i.bind($P(i)),c=D0(o)'
+$mvl = [regex]::Match($text, 'a=i\.bind\(\{reasoningLevel:(?:o\?\.options\?\.reasoningLevel\?\?)?i\.optionSpecs\.reasoningLevel\.values\[0\],maxOutputTokens:Math\.min\([0-9e]+,i\.optionSpecs\.maxOutputTokens\.max\)\}\),c=D0\(o\)' + [regex]::Escape($reasoningMarker))
 if ($mvl.Success) {
     $text = $text.Replace($mvl.Value, $officialBind)
 }
@@ -274,7 +274,7 @@ if ((Count-Str $text $deferNew) -gt 0) {
 }
 # failure diagnostics (/*ZCODE-TITLE-DIAG*/): drop the appended log statement
 $diagMarker = '/*ZCODE-TITLE-DIAG*/'
-$officialGenTextCatch = 'R=await U_(I,()=>a.generateText({abortSignal:S,messages:h,tools:[]})).catch(async z=>{'
+$officialGenTextCatch = 'R=await K0(I,()=>a.generateText({abortSignal:S,messages:h,tools:[]})).catch(async z=>{'
 if ((Count-Str $text $officialGenTextCatch) -gt 0) {
     $di = $text.IndexOf($officialGenTextCatch)
     if ($di -ge 0) {
@@ -288,12 +288,12 @@ if ((Count-Str $text $officialGenTextCatch) -gt 0) {
 }
 # short-input guard (/*ZCODE-TITLE-SHORT*/): restore the official threshold
 $shortGuardMarker = '/*ZCODE-TITLE-SHORT*/'
-$shortGuardOld = 'R4a=1;r(Qkt' + $shortGuardMarker
-$officialShortGuard = 'R4a=10;r(Qkt'
+$shortGuardOld = 'A7a=1;r(EIt' + $shortGuardMarker
+$officialShortGuard = 'A7a=10;r(EIt'
 if ((Count-Str $text $shortGuardOld) -gt 0) {
     $text = $text.Replace($shortGuardOld, $officialShortGuard)
 }
-# the filler replaced "||e.turnNumber!==0" inside D4a; restore that exact tail
+# the filler replaced "||e.turnNumber!==0" inside the P7a guard; restore that exact tail
 $text = $text.Replace($turnGuardFiller + $turnGuardCtx, $officialTurnGuard + $turnGuardCtx)
 $text = $text.Replace($v9Zkt, $officialZkt)
 $text = $text.Replace($v9B4aCall, $officialB4aCall)
@@ -302,7 +302,7 @@ $text = $text.Replace($v9S4a, $officialS4a)
 $text = $text.Replace($v9Prompt, $officialPrompt)
 
 # post-conditions
-if ((Count-Str $text $v9Marker) -ne 0) { throw 'v9 markers still present after reverse; refusing.' }
+if ((Count-Str $text $v9Marker) -ne 0) { throw 'v10 markers still present after reverse; refusing.' }
 if ((Count-Str $text $overallMarker) -ne 0) { throw 'overall digest marker still present after reverse; refusing.' }
 if ((Count-Str $text $refreshPrefix) -ne 0) { throw 'refresh marker still present after reverse; refusing.' }
 if ((Count-Str $text $refreshSameMarker) -ne 0) { throw 'same-title marker still present after reverse; refusing.' }
@@ -312,13 +312,13 @@ if ((Count-Str $text $noDeferMarker) -ne 0) { throw 'inline-attempt defer marker
 if ((Count-Str $text $diagMarker) -ne 0) { throw 'title diagnostics marker still present after reverse; refusing.' }
 if ((Count-Str $text $shortGuardMarker) -ne 0) { throw 'short-input guard marker still present after reverse; refusing.' }
 if ((Count-Str $text $officialPrompt) -ne 1) { throw 'official prompt not restored.' }
-if ((Count-Str $text $officialS4a) -ne 1) { throw 'official S4a not restored.' }
-if ((Count-Str $text $officialB4a) -ne 1) { throw 'official b4a not restored.' }
-if ((Count-Str $text $officialZkt) -ne 1) { throw 'official Zkt call not restored.' }
-if ((Count-Str $text $officialWwn) -ne 1) { throw 'official w2n attempt not restored.' }
+if ((Count-Str $text $officialS4a) -ne 1) { throw 'official v7a not restored.' }
+if ((Count-Str $text $officialB4a) -ne 1) { throw 'official y7a not restored.' }
+if ((Count-Str $text $officialZkt) -ne 1) { throw 'official TIt call not restored.' }
+if ((Count-Str $text $officialWwn) -ne 1) { throw 'official gNn attempt not restored.' }
 if (-not (Test-JsSyntax $text)) { throw 'node --check failed after reverse; refusing to write.' }
 [System.IO.File]::WriteAllBytes($cjsPath, $latin1.GetBytes($text))
-Write-Host '[2/3] v9 additions reversed; file is back to the official 3.16.3 title chain.'
+Write-Host '[2/3] v10 additions reversed; file is back to the official 3.17.2 title chain.'
 
 if ($NoRestart) {
     Write-Host '[3/3] done (NoRestart: leave ZCode closed).'
