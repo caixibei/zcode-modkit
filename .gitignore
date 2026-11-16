@@ -14,3 +14,4 @@ app-icon-backup/
 *.gwp-backup
 *.draftlogo-css-backup.bin
 zcode-icon-state.json
+/.mimosa/
