@@ -20,7 +20,7 @@
 ![GitHub code size](https://img.shields.io/github/languages/code-size/caixibei/zcode-modkit)
 ![GitHub file count](https://img.shields.io/github/directory-file-count/caixibei/zcode-modkit)
 
-ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.17.2**（上一适配版本 3.16.3 的脚本快照见 GitHub Release `zcode-3.14.1`）：
+ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.17.2**（上一适配版本 3.16.3 的脚本快照见 GitHub Release `zcode-3.16.3`）：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
 2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v10）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
