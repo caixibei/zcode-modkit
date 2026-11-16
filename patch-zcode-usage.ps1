@@ -175,7 +175,28 @@ if ($cClean -eq 1 -and $cPatch -eq 0) {
 } elseif ($cPatch -eq 1 -and $cClean -eq 0) {
     $state = 'patched'
 } else {
-    throw "unknown zcode.cjs state (retention clean=$cClean patched=$cPatch). ZCode version changed or file already modified in an unrecognized way? Refusing."
+    # ZCode 3.18.2 removed the 30-day rolling prune upstream: recordModelUsage /
+    # upsertTurnUsage / upsertToolUsage now end at the UPSERT with no prune call,
+    # and model_usage/turn_usage/tool_usage are never DELETEd by time. When the
+    # build holds no usage-table delete at all there is nothing to patch, so
+    # report it as already-retained instead of failing; a delete in an
+    # unrecognized shape still refuses loudly.
+    $pruneLeft = ([regex]::Matches($text, 'delete\s+from\s+(model_usage|turn_usage|tool_usage)', 'IgnoreCase')).Count
+    if ($pruneLeft -eq 0 -and $cPatch -eq 0) {
+        Write-Host '[1/4] state: not applicable (this build keeps usage history itself)'
+        Write-Host '     ZCode 3.18.2 dropped the 30-day prune: no usage table is deleted by time.'
+        Write-Host '     The retention patch is obsolete here; nothing to write.'
+        if ($NoRestart) {
+            Write-Host '[4/4] done (NoRestart: leave ZCode closed).'
+        } elseif ($zcodeExe) {
+            Start-Process $zcodeExe
+            Write-Host '[4/4] ZCode restarted.'
+        } else {
+            Write-Host '[4/4] done. Start ZCode manually.'
+        }
+        exit 0
+    }
+    throw "unknown zcode.cjs state (retention clean=$cClean patched=$cPatch usageDeletes=$pruneLeft). ZCode version changed or file already modified in an unrecognized way? Refusing."
 }
 Write-Host "[1/4] state: $state"
 

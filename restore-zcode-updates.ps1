@@ -20,8 +20,27 @@ $backupPath = Join-Path $PSScriptRoot 'app.asar.updates-backup'
 $hashPath   = Join-Path $PSScriptRoot 'app.asar.updates-backup.sha256'
 
 $mainRelPath = 'out/main/index.js'
-$oldFrag = 'enabled:pt==="production"'        # 25 bytes (clean original; 3.14.1 named the var Ge)
-$newFrag = 'enabled:!1/*xxxxxxxxxxx*/'        # 25 bytes (patched)
+# Both windows are derived from the current bundle (the minified updater-flag
+# identifier differs per build: 3.14.1 Ge, 3.16.3/3.17.2 pt, 3.18.2 ht). The
+# identifier stays visible in the patched form, so the reverse never needs an
+# external mapping.
+$cleanPattern = 'enabled:(\w+)==="production"'
+$patchedPattern = 'enabled:(\w+)&&0/\*x{8}\*/'
+$patchedSuffix = '&&0/*xxxxxxxx*/'   # 15 bytes, same width as ==="production"
+
+function Get-UpdatesFragments([string]$text) {
+    $mc = [regex]::Matches($text, $cleanPattern)
+    $mp = [regex]::Matches($text, $patchedPattern)
+    if ($mc.Count -eq 1 -and $mp.Count -eq 0) {
+        $id = $mc[0].Groups[1].Value
+        return @{ id = $id; state = 'unpatched'; old = $mc[0].Value; new = ('enabled:' + $id + $patchedSuffix) }
+    }
+    if ($mp.Count -eq 1 -and $mc.Count -eq 0) {
+        $id = $mp[0].Groups[1].Value
+        return @{ id = $id; state = 'patched'; old = ('enabled:' + $id + '==="production"'); new = $mp[0].Value }
+    }
+    throw "unknown app.asar state (clean=$($mc.Count) patched=$($mp.Count)); cannot restore automatically."
+}
 
 function Count-Str([string]$hay, [string]$s) {
     return ([regex]::Matches($hay, [regex]::Escape($s))).Count
@@ -129,10 +148,11 @@ $asar = Read-Asar $asarPath
 $mainHit = Get-EntryAndBytes $asar $mainRelPath
 if (-not $mainHit) { throw "main bundle not found ($mainRelPath); cannot restore." }
 $mainText = $latin1.GetString($mainHit.bytes)
-$cOld = Count-Str $mainText $oldFrag
-$cNew = Count-Str $mainText $newFrag
+$frag = Get-UpdatesFragments $mainText
+$oldFrag = $frag.old
+$newFrag = $frag.new
 
-if ($cNew -eq 0 -and $cOld -eq 1) {
+if ($frag.state -eq 'unpatched') {
     Write-Host '[1/3] no update-disable patch present, nothing to restore.'
     if ($NoRestart) {
         Write-Host 'done (NoRestart: leave ZCode closed).'
@@ -140,10 +160,7 @@ if ($cNew -eq 0 -and $cOld -eq 1) {
     Read-Host 'Press Enter to exit'
     exit 0
 }
-if ($cNew -ne 1 -or $cOld -ne 0) {
-    throw 'app.asar is in an unknown state (both/neither fragment present); cannot restore automatically.'
-}
-Write-Host '[1/3] state: patched'
+Write-Host "[1/3] state: patched (updater flag var: $($frag.id))"
 
 # preferred: reverse the 25-byte fragment in the CURRENT asar in place — the
 # state gate above guarantees the fragment is present exactly once, so this

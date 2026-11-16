@@ -24,11 +24,11 @@ try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 
 $tasks = @(
     [pscustomobject]@{ Id = '1'; Kind = 'patch';   Label = 'UI font patch';            Script = 'patch-zcode-font.ps1' },
-    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title: task-type prefix + refresh (3.17.2, default 3 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
+    [pscustomobject]@{ Id = '2'; Kind = 'patch';   Label = 'session title: task-type prefix + refresh (3.18.2, default 3 turns)'; Script = 'patch-zcode-title-lastturn.ps1' },
     [pscustomobject]@{ Id = '3'; Kind = 'patch';   Label = 'wallpaper patch';          Script = 'patch-zcode-wallpaper.ps1' },
     [pscustomobject]@{ Id = '4'; Kind = 'patch';   Label = 'disable update checks';    Script = 'patch-zcode-updates.ps1' },
     [pscustomobject]@{ Id = '5'; Kind = 'patch';   Label = 'Shanghai timezone fix';    Script = 'patch-zcode-timezone.ps1' },
-    [pscustomobject]@{ Id = '6'; Kind = 'patch';   Label = 'keep usage history (no 30d prune)'; Script = 'patch-zcode-usage.ps1' },
+    [pscustomobject]@{ Id = '6'; Kind = 'patch';   Label = 'keep usage history (obsolete on 3.18.2: no-op)'; Script = 'patch-zcode-usage.ps1' },
     [pscustomobject]@{ Id = '7'; Kind = 'patch';   Label = 'gear wallpaper (thought-level switch)'; Script = 'patch-zcode-wallpaper-gear.ps1' },
     [pscustomobject]@{ Id = '8'; Kind = 'patch';   Label = 'boot animation (intro video on launch)'; Script = 'patch-zcode-boot-animation.ps1' },
     [pscustomobject]@{ Id = '9'; Kind = 'restore'; Label = 'restore font';             Script = 'restore-zcode-font.ps1' },

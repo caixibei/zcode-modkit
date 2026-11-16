@@ -116,6 +116,21 @@ if ($msPatched.Count -eq 0 -and $msClean.Count -eq 1) {
     Read-Host 'Press Enter to exit'
     exit 0
 }
+# ZCode 3.18.2 dropped the 30-day prune upstream, so neither the clean
+# retention-constant signature nor the patched one exists any more: there is
+# nothing to restore. Only a usage-table delete in an unrecognized shape is an
+# error worth refusing.
+if ($msPatched.Count -eq 0 -and $msClean.Count -eq 0) {
+    $pruneLeft = ([regex]::Matches($text, 'delete\s+from\s+(model_usage|turn_usage|tool_usage)', 'IgnoreCase')).Count
+    if ($pruneLeft -eq 0) {
+        Write-Host '[1/3] this build keeps usage history itself (no 30-day prune); nothing to restore.'
+        if ($NoRestart) {
+            Write-Host 'done (NoRestart: leave ZCode closed).'
+        } elseif ($zcodeExe) { Start-Process $zcodeExe; Write-Host 'ZCode restarted.' }
+        Read-Host 'Press Enter to exit'
+        exit 0
+    }
+}
 if ($msPatched.Count -ne 1 -or $msClean.Count -ne 0) {
     throw "zcode.cjs is in an unknown state (clean=$($msClean.Count) patched=$($msPatched.Count)); cannot restore automatically."
 }

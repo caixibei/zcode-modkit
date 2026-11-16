@@ -193,6 +193,17 @@ if (($cPa -eq 1 -and $cPb -eq 1) -and (($cPl -eq 1 -and $cCl -eq 0) -or ($cPl -e
     }
 }
 if (-not $restored) {
+    # The whole-file fallback is only legitimate when the CURRENT file is this
+    # kit's patched form of the SAME build the backup came from. A stale backup
+    # taken under an older ZCode would otherwise overwrite a newer zcode.cjs
+    # with an older runtime and break the app.
+    if (-not ($cPa -eq 1 -and $cPb -eq 1)) {
+        Write-Host '[X] current zcode.cjs does not carry this kit''s title patch for the matched backup version.' -ForegroundColor Red
+        Write-Host '    Refusing the whole-file backup overwrite (it would replace this build with an older runtime).' -ForegroundColor Yellow
+        Write-Host '    Nothing was written.' -ForegroundColor Yellow
+        Read-Host 'Press Enter to exit'
+        exit 1
+    }
     Write-Host '[..] in-place reversal not applicable (current file lacks recognizable title-patch fragments).'
     Write-Host '     Falling back to whole-file backup restore — NOTE: patches applied after the backup'
     Write-Host '     (e.g. the usage-retention patch) are erased by this path; re-apply them afterwards.'

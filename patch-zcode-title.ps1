@@ -243,7 +243,19 @@ if ($state -eq 'unpatched') {
     Write-Host "[1/4] state: v1 patch detected (ZCode $sigTag) - upgrading: strengthening language rule"
     $baseText = Get-CleanBaseline $sig
 } else {
-    throw "unknown zcode.cjs state (lang=$cOldLang/$cNewLang; $($counts -join ' ')). ZCode version changed? Update the signature table in this script. Refusing."
+    # Signature table stops at 3.14.1. From 3.14.3 the host always ships a
+    # truthy config.titleGeneration, so the regression this script targets is
+    # gone and its equal-length windows no longer exist in the bundle. Do not
+    # guess a new window on a newer build: say so loudly and exit without
+    # touching the file (3.16.3+ users want patch-zcode-title-lastturn.ps1).
+    Write-Host '[1/4] not applicable: this build is outside the legacy signature table' -ForegroundColor Yellow
+    Write-Host "      (lang=$cOldLang/$cNewLang; $($counts -join ' '))" -ForegroundColor DarkGray
+    Write-Host '      The 3.12.3/3.14.1 eligibility regression was fixed upstream (3.14.3+).'
+    Write-Host '      For ZCode 3.16.3+ use patch-zcode-title-lastturn.ps1 (task-type prefix + refresh).'
+    Write-Host '      Nothing was written.'
+    if ($NoRestart) { exit 0 }
+    Read-Host 'Press Enter to exit'
+    exit 0
 }
 
 # baseline must belong to the SAME zcode.cjs generation as the target file:

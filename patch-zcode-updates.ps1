@@ -39,13 +39,35 @@ $latin1 = [System.Text.Encoding]::GetEncoding(28591)  # lossless byte<->char rou
 $backupPath = Join-Path $PSScriptRoot 'app.asar.updates-backup'
 $hashPath   = Join-Path $PSScriptRoot 'app.asar.updates-backup.sha256'
 
-# ---- the main-process bundle this kit patches (ZCode 3.14.1 / 3.16.3) ----
+# ---- the main-process bundle this kit patches (ZCode 3.14.1 .. 3.18.2) ----
 $mainRelPath = 'out/main/index.js'
 
-# original fragment: must occur exactly once in out/main/index.js
-$oldFrag = 'enabled:pt==="production"'        # 25 bytes
-# patched fragment: equal length; JS comment filler keeps the bundle valid
-$newFrag = 'enabled:!1/*xxxxxxxxxxx*/'        # 25 bytes
+# The patched window is derived from the CURRENT bundle instead of a fixed
+# per-version literal: only the minified identifier in front of
+# ==="production" changes between builds (3.14.1: Ge, 3.16.3/3.17.2: pt,
+# 3.18.2: ht). Both forms keep the identifier visible, so the patched file
+# can always be reversed byte-exactly without an external mapping.
+#   clean  : enabled:<id>==="production"        -> enabled is <id> === "production"
+#   patched: enabled:<id>&&0/*xxxxxxxx*/        -> <id> && 0 is falsy; the
+#           15-byte suffix keeps the whole window equal-length, and the JS
+#           comment filler keeps the bundle syntactically valid.
+$cleanPattern = 'enabled:(\w+)==="production"'
+$patchedPattern = 'enabled:(\w+)&&0/\*x{8}\*/'
+$patchedSuffix = '&&0/*xxxxxxxx*/'   # 15 bytes, same width as ==="production"
+
+function Get-UpdatesFragments([string]$text) {
+    $mc = [regex]::Matches($text, $cleanPattern)
+    $mp = [regex]::Matches($text, $patchedPattern)
+    if ($mc.Count -eq 1 -and $mp.Count -eq 0) {
+        $id = $mc[0].Groups[1].Value
+        return @{ id = $id; state = 'unpatched'; old = $mc[0].Value; new = ('enabled:' + $id + $patchedSuffix) }
+    }
+    if ($mp.Count -eq 1 -and $mc.Count -eq 0) {
+        $id = $mp[0].Groups[1].Value
+        return @{ id = $id; state = 'patched'; old = ('enabled:' + $id + '==="production"'); new = $mp[0].Value }
+    }
+    throw "unknown app.asar state (clean=$($mc.Count) patched=$($mp.Count)). ZCode version changed? Update the signature in this script. Refusing."
+}
 
 function Count-Str([string]$hay, [string]$s) {
     return ([regex]::Matches($hay, [regex]::Escape($s))).Count
@@ -164,17 +186,12 @@ if (-not $mainHit) {
     throw "main bundle not found in this ZCode build ($mainRelPath). Version changed? Refusing."
 }
 $mainText = $latin1.GetString($mainHit.bytes)
-$cOld = Count-Str $mainText $oldFrag
-$cNew = Count-Str $mainText $newFrag
-
-if ($cOld -eq 1) {
-    $state = 'unpatched'
-} elseif ($cNew -eq 1) {
-    $state = 'patched'
-} else {
-    throw "unknown app.asar state (old=$cOld new=$cNew). ZCode version changed? Update the signature in this script. Refusing."
-}
-Write-Host "[1/4] state: $state"
+# derive the equal-length window for THIS build (identifier captured, not assumed)
+$frag = Get-UpdatesFragments $mainText
+$oldFrag = $frag.old
+$newFrag = $frag.new
+$state = $frag.state
+Write-Host "[1/4] state: $state (updater flag var: $($frag.id))"
 
 # 2) backup must hold the clean (unpatched) asar of this machine
 $needBackupWrite = $true
@@ -247,7 +264,7 @@ if ($state -eq 'patched') {
     for ($i = 0; $i -lt $patchedMain.Length; $i++) {
         if ($patchedMain[$i] -ne $mainHit.bytes[$i]) { $diffs++ }
     }
-    if ($diffs -ne 17) { throw "unexpected diff byte count inside the patch window: $diffs (expected 17), refusing to write." }
+    if ($diffs -ne 15) { throw "unexpected diff byte count inside the patch window: $diffs (expected 15), refusing to write." }
     if ([System.Linq.Enumerable]::SequenceEqual($newAsarBytes, $asar.bytes)) { throw 'patched buffer is identical to the current asar; window copy failed.' }
 
     $tmpPath = "$asarPath.tmp"
@@ -260,7 +277,7 @@ if ($state -eq 'patched') {
         throw 'rebuilt asar failed self-check; original untouched.'
     }
     Move-Item -Force $tmpPath $asarPath
-    Write-Host '[4/4] patch written (equal-length, 25-byte window, 17 bytes changed, other patches preserved).'
+    Write-Host "[4/4] patch written (equal-length, $($newFrag.Length)-byte window, 15 bytes changed, other patches preserved)."
 }
 
 if ($NoRestart) {

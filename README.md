@@ -20,20 +20,20 @@
 ![GitHub code size](https://img.shields.io/github/languages/code-size/caixibei/zcode-modkit)
 ![GitHub file count](https://img.shields.io/github/directory-file-count/caixibei/zcode-modkit)
 
-ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.17.2**（上一适配版本 3.16.3 的脚本快照见 GitHub Release `zcode-3.16.3`）：
+ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一工具箱入口。**当前适配 ZCode 3.18.2**（上一适配版本 3.17.2 的脚本快照见 GitHub Release `zcode-3.17.2`）：
 
 1. **UI 字体美化补丁**（`patch-zcode-font`）——替换界面字体栈
-2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v10）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
+2. **会话标题自动生成修复补丁**（`patch-zcode-title-lastturn`，v11）——在官方标题生成（3.14.3 起内置 `generateTitleCandidate`）之上保留本项目的标题规则：标题统一为 `（类型）任务总结`（18 类开发任务前缀：修复/新增/设计/排查/分析/重构/优化/配置/迁移/文档/审查/联调/测试/部署/安全/数据/调研/其他，全角括号后不加空格），标题输入改为全体用户消息的两阶段摘要，并内置每 N 个成功轮次持续重提炼（默认 3）
 3. **桌面壁纸补丁**（`patch-zcode-wallpaper`）——把窗口根背景换成自选照片（半透明主题色纱罩保证可读性）
 4. **更新检查禁用补丁**（`patch-zcode-updates`）——彻底关闭自动更新检测，侧边栏不再出现绿色「更新」徽标；想升级时自行下载安装包
 5. **定时任务时区修复补丁**（`patch-zcode-timezone`）——让 ZCode 的 cron 定时任务按上海时间（UTC+8）触发，修复系统级 `TZ=UTC` 环境变量造成的 8 小时偏差
-6. **用量历史保留补丁**（`patch-zcode-usage`）——停用用量统计的 30 天滚动清理，「累计 Token 数」跨月持续累加不再缩水
+6. **用量历史保留补丁**（`patch-zcode-usage`）——停用用量统计的 30 天滚动清理，「累计 Token 数」跨月持续累加不再缩水。**3.18.2 已由官方移除 30 天清理，本补丁在新版上自动判定为「无需打补丁」并非报错**
 7. **挡位壁纸补丁**（`patch-zcode-wallpaper-gear`）——壁纸跟随输入框「思考级别」自动切换，纯 CSS 实现，切档即时换图（「关闭思考」不配图，M1–M4 覆盖其余全部档位，详见第七章映射表）
 8. **开机动画补丁**（`patch-zcode-boot-animation`）——每次启动 ZCode 播放一段铺满窗口的片头视频，点任意处或按 Esc 跳过，播完自动淡出；片源放 `boot-animation/` 目录（参考 dsh-boot-animation 的播放规则实现，详见第八章）
 9. **输入框水印文字补丁**（`patch-zcode-draft-logo`）——把新建任务页那个大 Z 水印换成自定义文字水印（默认 `DeepSeek Harness`），纯 CSS 覆盖，不动 JS，详见第九章
 10. **应用图标补丁**（`patch-zcode-icon`）——把托盘 / 任务栏 / 「关于」/ 侧边栏 logo / 开始菜单图标一起换成自定义图标（内置蓝色、黑色两套，运行时可选），不修改 `ZCode.exe`、不破坏签名，详见第十章
 
-**统一工具箱**（`zcode-toolbox.bat`）：把 10 个补丁 + 10 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。六个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新 / 开机动画 / 水印文字）全部基于**当前 asar 原位操作**，打/还原/换图/换字互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v10+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）；图标补丁只改 `resources` 下的两个图片文件与 `.lnk` 的图标指向，与 asar 完全无关（见第十章）。
+**统一工具箱**（`zcode-toolbox.bat`）：把 10 个补丁 + 10 个还原做成一张任务清单，支持一次输入多个任务编号（如 `1 3` 或 `1,3,4`）按序执行；ZCode 退出检查只做一次，全部完成后统一重启一次。六个 asar 补丁（字体 / 壁纸 / 挡位壁纸 / 禁更新 / 开机动画 / 水印文字）全部基于**当前 asar 原位操作**，打/还原/换图/换字互不影响（详见「互不影响保证」）；两个 `zcode.cjs` 补丁（标题 v11+refresh / 用量保留）同样基于**当前文件原位操作**，互不覆盖；时区补丁不改动 ZCode 程序文件，只调整用户环境变量（见「五、定时任务时区修复补丁」）；图标补丁只改 `resources` 下的两个图片文件与 `.lnk` 的图标指向，与 asar 完全无关（见第十章）。
 
 ---
 
@@ -94,7 +94,7 @@ ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一�
 ## 环境要求
 
 - Windows 10 / 11（仅需系统自带 PowerShell，无第三方依赖；还原脚本的可选语法检查用到 Node.js，未安装时自动跳过）
-- ZCode 桌面版 3.17.2（Electron 应用，安装目录含 `resources\app.asar`）
+- ZCode 桌面版 3.18.2（Electron 应用，安装目录含 `resources\app.asar`）
 
 ## 使用方法
 
@@ -170,7 +170,8 @@ ZCode 3.12.3（2026-09-17 发布）起，新建交互会话不再触发标题自
 
 | ZCode 版本 | 资格函数混淆名 | 支持状态 |
 | --- | --- | --- |
-| 3.17.2 | 官方链路（`D7a`/`gNn`/`O7a` 等） | ✅ v10 已适配（当前脚本） |
+| 3.18.2 | 官方链路（`Ktc`/`t3n`/`Ztc` 等） | ✅ v11 已适配（当前脚本） |
+| 3.17.2 | 官方链路（`D7a`/`gNn`/`O7a` 等） | 📦 v10 快照随 Release 归档 |
 | 3.16.3 | 官方链路（`D4a`/`w2n`/`N4a` 等） | 📦 v9 快照随 Release 归档 |
 | 3.14.x | `Pba` / `Tba` | 📦 已移至 GitHub Release `zcode-3.14.1` |
 | 3.12.3 | `FYi` / `NYi` | 📦 已移至 GitHub Release `zcode-3.14.1` |
@@ -200,7 +201,7 @@ ZCode 3.12.3（2026-09-17 发布）起，新建交互会话不再触发标题自
 
 ZCode 版本升级会覆盖 `resources\glm\zcode.cjs`，标题补丁随之失效并出现 `unknown zcode.cjs state` 报错（这是版本保护在起作用，不是故障）。处理方式：
 
-1. v10 补丁（本仓库当前版本）适配 ZCode 3.17.2：升级到 3.17.x 后直接重跑 `patch-zcode-title-lastturn.bat` 即可；
+1. v11 补丁（本仓库当前版本）适配 ZCode 3.18.2：升级到 3.18.x 后直接重跑 `patch-zcode-title-lastturn.bat` 即可；
 2. 若官方标题实现再次重构导致锚点失配，需人工定位新版 `zcode.cjs` 中的新混淆函数名（官方函数带 `r(...,"maybeStartSessionTitleGeneration")` 等调试标注，可直接搜索），再更新两个脚本中的锚点常量；
 3. 3.16.3 的 v9 与 3.14.1 时代的 v4–v7 补丁及 3.12.3 专用补丁保留在 GitHub Release，本仓库不再维护旧版签名表。
 
@@ -252,7 +253,30 @@ v7 只改清洗链里的前缀拼接：
 
 使用方式：已打过 v6 的文件重跑 `patch-zcode-title-lastturn.bat`（工具箱 `[2]`）即可原地升级到 v7，不需要先还原；还原仍用 `restore-zcode-title-lastturn.bat`（工具箱 `[10]`）。
 
-### v10：嫁接 3.17.2 官方标题链路（当前版本）
+### v11：嫁接 3.18.2 官方标题链路（当前版本）
+
+ZCode 3.18.2 的标题链路结构未变，但混淆器把**整条链的标识符全部换名**，同时官方做了一处结构性精简：`cleanGeneratedTitle` 不再调用 `b7a`/`k7a` 两个 sha 解析助手（改为 `Ftc`/`Utc`），标题候选的模型绑定也从 `$P()`/`D0()` 改成 `LL()`/`bg()`。v11 因此只做**锚点换名 + 去掉两个已无对应物的子补丁**，业务规则与 v10 完全一致。
+
+官方函数名映射（3.17.2 → 3.18.2）：`EIt→iRt`、`gNn→t3n`、`P7a→Gtc`、`D7a→Ktc`、`TIt→nRt`、`_7a/v4a→Mtc`、`y7a/b4a→Ntc`、`g7a/y4a→Dtc`、`v7a/S4a→Ltc`、`O7a→Ztc`、`E7a→Vtc`、`A7a→Htc`、`fNn→XBn`、`h7o→zYo`、`jwe/qke→XTe`、`Sr/yr→dr`、`U_/K0→by`、`PP/$P→LL`、`A0/D0→bg`。
+
+| 官方函数（3.18.2） | 作用 | v11 改造 |
+| --- | --- | --- |
+| `Dtc`（system prompt） | 标题生成提示词 | 替换为 18 类开发任务中文提示词，全角括号后不加空格 |
+| `Ltc`（cleanGeneratedTitle） | 标题清洗 | 换为 v7 解析器：半角括号归一、未知类型按关键词映射到 18 类、吞掉括号后空格（长度上限改用官方 `zYo`） |
+| `Ntc` + 调用点 `_=Ntc(e),v=this.createEvent` | 构造消息 | 增加可选第二参数作为 system prompt（两阶段摘要通道） |
+| `Ktc` 内 `nRt` 调用 | 标题候选生成 | 输入改为全体用户消息压缩摘要（首 700 + 近 6×220 / 长会话两阶段） |
+| `Gtc` 的 `turnNumber!==0` | 仅首轮触发 | 等长注释填充移除，交给冷却逻辑 |
+| `t3n`（seed 入口） | 触发守卫 | 每 N 个成功轮次重提炼（`sessionTitleGenerationTurn` 冷却标记，默认 3） |
+| `Ztc`（persist） | 持久化 | 标题未变化时跳过写库（避免每次刷新都发 SessionTitleUpdated） |
+| `iRt` 调用点的 `deferIfProviderRuntimeHeadersRefresh` | 把内联标题尝试推迟到 runtime headers 刷新之后 | 改为 `!1`，恢复内联尝试（理由同 v10 章节） |
+| `Htc=10` 短输入门槛 | 当前输入少于 10 字符不触发标题 | 降为 1：v11 用整会话摘要，短轮次仍是有效刷新点 |
+| `Ktc.call` 的 `.catch` | 失败只记日志 | 重置 `sessionTitleGenerationAttempted`，失败轮次不计入冷却 |
+
+**相对 v10 去掉的两项**：① 标题模型 `reasoningLevel` 绑定改造——3.18.2 已把绑定收敛进 `LL()`/`bg()`，官方行为即为 v10 实测可用的 `values[0]`（low）档；② `%TEMP%\zcode-title-diag.log` 失败诊断——那是 3.17.2 排查期的一次性探针，锚点（`K0(I,()=>a.generateText(...))`）在新版已改为 `by(P,()=>c.generateText(...))`，不再随补丁安装。
+
+验证状态（本机 3.18.2.10443 实测）：补丁可重复执行（第二次输出「already present」不再写入）；`restore-zcode-title-lastturn.ps1` 逐块反正后与官方 `zcode.cjs` **逐字节一致**（`cmp` 比对通过）。升级到 3.18.x 时 ZCode 会覆盖 `zcode.cjs` 回到官方态，直接重跑工具箱 `[2]` 即可。
+
+### v10：嫁接 3.17.2 官方标题链路（历史版本，已由 v11 取代）
 
 ZCode 3.14.3 起官方恢复了标题自动生成（`generateTitleCandidate` 独立模型请求），3.14.1 时代的 v4–v7 锚点随之全部失效。v10 在**官方新链路**上重建本项目的全部标题规则（锚点均经静态分析验证唯一）。v10 与 v9 逻辑完全相同，仅因 3.17.2 混淆器整体换名而更新全部锚点；官方函数名映射：`Qkt→EIt`、`w2n→gNn`、`D4a→P7a`、`M4a→D7a`、`Zkt→TIt`、`v4a→_7a`、`b4a→y7a`、`y4a→g7a`、`S4a→v7a`、`w4a→b7a`、`T4a→k7a`、`EBo→h7o`、`jwe→qke`、`PP→$P`、`A0→D0`、`U_→K0`、`R4a→A7a`、`v2n→fNn`、`P4a→E7a`、`Sr→yr`：
 
@@ -320,7 +344,7 @@ ZCode 3.14.3 起官方恢复了标题自动生成（`generateTitleCandidate` 独
 - **幂等与状态识别**：重复运行自动识别已打补丁状态并支持换图；检测到损坏的补丁块时拒绝执行并提示先还原。
 - **重跑自检（2026-10-15 新增）**：重打包写盘前从磁盘重读源 asar，逐字节抽检 `package.json`（Electron 启动入口）与 `out/main/index.js` 两个哨兵文件，与源不一致立即中止且原 asar 不动——杜绝重跑 / 还原场景下 asar 重建错位导致 ZCode 无法启动的问题（详见「互不影响保证」章「重跑安全」）。
 - **与字体补丁共存**：字体栈在 CSS 补丁块之前，互不干扰；打壁纸补丁前打过字体补丁，还原壁纸后字体补丁仍然保留。
-- **版本保护**：渲染层 CSS 按运行时从 asar 头部动态发现（`out/renderer/assets/styles-*.css` 唯一命中；3.14.1 为 `styles-C8Nayk5k.css`，3.16.3 为 `styles-9Z13W0KP.css`，3.17.2 为 `styles-NK68EN_n.css`），找不到唯一目标时拒绝执行。3.16.3 起 asar 头部带每文件 integrity（SHA256），重打包时未触碰文件的 integrity 原样保留、被替换文件重算，Electron 加载器校验依然通过。
+- **版本保护**：渲染层 CSS 按运行时从 asar 头部动态发现（`out/renderer/assets/styles-*.css` 唯一命中；3.14.1 为 `styles-C8Nayk5k.css`，3.16.3 为 `styles-9Z13W0KP.css`，3.17.2 为 `styles-NK68EN_n.css`，3.18.2 为 `styles-D4aYlB9N.css`），找不到唯一目标时拒绝执行。3.16.3 起 asar 头部带每文件 integrity（SHA256），重打包时未触碰文件的 integrity 原样保留、被替换文件重算，Electron 加载器校验依然通过。
 
 > 升级注意：ZCode 升级会覆盖 `app.asar`（CSS 文件名随版本变化），壁纸补丁随之失效——先运行还原，再重打（脚本按 `styles-*.css` 通配动态定位，无需改代码即可适配新文件名）。
 
@@ -343,7 +367,9 @@ ZCode 桌面端启动时会检查更新并每小时轮询一次，检测到新�
 
 **工作原理与安全机制**
 
-- **单一入口，等长替换**：更新逻辑只在主进程包 `out/main/index.js` 初始化（`initAutoUpdater`，全包唯一调用点；host/worker/preload 均无更新逻辑）。初始化函数的第一个分支就是应用自带的禁用开关（`enabled===!1` 时清掉轮询定时器直接返回），补丁把唯一调用点的 `enabled:pt==="production"`（`pt` 是构建期常量 `"production"`，3.14.1 中名为 `Ge`）等长替换为 `enabled:!1/*…*/`（25 字节 → 25 字节，全文件仅 17 个字节变化），asar 头部偏移与文件大小不变，无需重打包。
+- **单一入口，等长替换**：更新逻辑只在主进程包 `out/main/index.js` 初始化（`initAutoUpdater`，全包唯一调用点；host/worker/preload 均无更新逻辑）。初始化函数的第一个分支就是应用自带的禁用开关（`enabled===!1` 时清掉轮询定时器直接返回），补丁把唯一调用点的 `enabled:<id>==="production"`（`<id>` 是构建期常量 `"production"`：3.14.1 为 `Ge`、3.16.3/3.17.2 为 `pt`、3.18.2 为 `ht`）**等长替换**为 `enabled:<id>&&0/*xxxxxxxx*/`（同样是 25 字节，全文件仅 15 个字节变化），asar 头部偏移与文件大小不变，无需重打包。
+
+自 3.18.2 适配起，`<id>` 不再写死在脚本里：补丁先用正则 `enabled:(\w+)==="production"` 捕获本机真实的标识符再派生替换串，且**替换后的形态保留该标识符**（`&&0` 短路求值为假，注释填充保持等长），因此还原时不依赖任何外部映射，也能反推出原串做字节级回滚。识别不到唯一命中时仍然拒绝执行。
 - **禁用后的行为**（静态分析确认）：启动检查与每小时轮询均不注册；`UpdateStateChanged` / `UpdateReady` 不再广播；侧边栏绿色徽标由渲染层订阅这些状态渲染，状态恒为 idle，徽标不会出现；菜单「检查更新」点击后返回禁用态（渲染层弹「开发环境不检查更新」提示，不发起网络请求）。设置里的 `autoDownloadAndInstallUpdates` 开关只控制自动下载，与本补丁无关、互不影响。
 - **自动备份与幂等**：与字体补丁同机制——首打时字节级备份当前 `app.asar`（`app.asar.updates-backup` + SHA-256 指纹）；备份缺失时从补丁态反向重建；重复运行自动识别已打补丁状态；写入前后自检（仅允许 17 字节差异、tmp 文件通过 asar 解析校验后才替换）。
 - **与其他补丁共存**：字体/壁纸补丁只改渲染层 CSS，本补丁只改主进程 `index.js`，互不干扰。
@@ -385,6 +411,8 @@ ZCode 桌面端启动时会检查更新并每小时轮询一次，检测到新�
 ## 六、用量历史保留补丁
 
 停用 ZCode 的用量统计 30 天滚动清理，让设置页「累计 Token 数」跨月持续累加、不再随高峰日出窗而缩水。需要提前退出 ZCode。
+
+> **ZCode 3.18.2 起本补丁已自动判定为「无需打补丁」**：官方删掉了 30 天清理——`recordModelUsage`/`upsertTurnUsage`/`upsertToolUsage` 现在只做 UPSERT、不再调用清理函数，全包搜索也没有任何按时间删除 `model_usage`/`turn_usage`/`tool_usage` 的语句（`queryAppUsage` 的 `started_at >= ?` 只是界面查询区间，不是删除）。补丁检测到构建内不存在用量表 DELETE 时会打印「this build keeps usage history itself」并以成功状态退出，不再报 `unknown zcode.cjs state`。
 
 ### 问题背景
 
@@ -519,7 +547,7 @@ mos=30,hos=mos*24*60*60*1e3   →   mos=30,hos=9e15/*xxxxxxxx*/
 
 新建任务页（空输入框状态）居中那个大 Z 水印，把它换成一行文字水印（默认 `DeepSeek Harness`）。
 
-**水印的来源**（3.16.3 实测，3.17.2 中 `data-v4-draft-logo` 与 `aspect-[5/4]` 锚点仍然存在）：它与问候语在同一个组件里，渲染为 `<div aria-hidden="true" class="... aspect-[5/4] w-[min(72vw,25rem)] ...">` 容器内的两个节点——暗色主题是 `img[data-v4-draft-logo="dark"]`（一个 436×360 的 SVG data URI），亮色主题是内联 `<svg width="400" height="320" viewBox="0 0 400 320">`。
+**水印的来源**（3.16.3 实测；3.17.2 与 3.18.2 中 `data-v4-draft-logo`、`aspect-[5/4]` 与 `viewBox="0 0 400 320"` 锚点均仍然存在）：它与问候语在同一个组件里，渲染为 `<div aria-hidden="true" class="... aspect-[5/4] w-[min(72vw,25rem)] ...">` 容器内的两个节点——暗色主题是 `img[data-v4-draft-logo="dark"]`（一个 436×360 的 SVG data URI），亮色主题是内联 `<svg width="400" height="320" viewBox="0 0 400 320">`。
 
 **补丁原理**：不碰 JS bundle，只向渲染层 `styles-*.css` 追加一段带 `ZCODE-DRAFTLOGO-PATCH-BEGIN/END` 标记的 CSS 块——先 `display:none` 隐藏上面两个节点，再用容器 `::after` 的 `content:"…"` 直接画**真实 CSS 文字**（不是背景图）。
 
@@ -631,7 +659,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-font.bat` / `restore-zcode-font.ps1` | 字体还原入口 |
 | `patch-zcode-title.bat` / `patch-zcode-title.ps1` | 标题自动生成修复补丁入口（3.12.3 专用） |
 | `restore-zcode-title.bat` / `restore-zcode-title.ps1` | 标题补丁还原入口 |
-| `patch-zcode-title-lastturn.bat` / `.ps1` | 标题类型前缀+持续重提炼入口（3.17.2，v10；`-RefreshTurns` 默认 3） |
+| `patch-zcode-title-lastturn.bat` / `.ps1` | 标题类型前缀+持续重提炼入口（3.18.2，v11；`-RefreshTurns` 默认 3） |
 | `restore-zcode-title-lastturn.bat` / `.ps1` | 标题六类前缀+持续重提炼还原入口 |
 | `patch-zcode-wallpaper.bat` / `patch-zcode-wallpaper.ps1` | 桌面壁纸补丁入口（含选图菜单与纱浓度调节） |
 | `restore-zcode-wallpaper.bat` / `restore-zcode-wallpaper.ps1` | 壁纸还原入口 |
@@ -639,7 +667,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 | `restore-zcode-updates.bat` / `restore-zcode-updates.ps1` | 更新检测还原入口 |
 | `patch-zcode-timezone.bat` / `patch-zcode-timezone.ps1` | 定时任务时区修复入口（设置用户级 `TZ=Asia/Shanghai`，不改 ZCode 程序文件） |
 | `restore-zcode-timezone.bat` / `restore-zcode-timezone.ps1` | 时区设置还原入口 |
-| `patch-zcode-usage.bat` / `patch-zcode-usage.ps1` | 用量历史保留补丁入口（停用 30 天滚动清理，`zcode.cjs` 等长替换） |
+| `patch-zcode-usage.bat` / `patch-zcode-usage.ps1` | 用量历史保留补丁入口（停用 30 天滚动清理，`zcode.cjs` 等长替换；3.18.2 起自动判定为无需打补丁） |
 | `restore-zcode-usage.bat` / `restore-zcode-usage.ps1` | 用量清理还原入口（优先原位反替换，兼容同文件其他补丁） |
 | `patch-zcode-wallpaper-gear.bat` / `patch-zcode-wallpaper-gear.ps1` | 挡位壁纸补丁入口（思考级别联动换图，含纱浓度调节） |
 | `restore-zcode-wallpaper-gear.bat` / `restore-zcode-wallpaper-gear.ps1` | 挡位壁纸还原入口（只剥自己的 CSS 块，其它补丁保留） |
@@ -688,8 +716,8 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 - **ZCode 启动时打印 `Most NODE_OPTIONs are not supported in packaged apps`**：本机系统环境变量里设置了 `NODE_OPTIONS`（常见为 `--max-old-space-size=8192`），打包版 Electron 不支持该变量，每次启动都会打印这条 ERROR（仅提示，不影响功能）。本工具包的全部补丁 / 还原脚本在启动 ZCode 前会自动清掉本进程继承的 `NODE_OPTIONS`，经脚本重启的 ZCode 不再出现该报错；**手动**双击 ZCode 图标启动时仍会看到——若想去掉，请在系统环境变量中自行删除 `NODE_OPTIONS`，或接受这条无害提示。
 - **还原时提示 backup not found**：本机从未打过对应补丁（备份由补丁脚本生成），或备份文件已被删除。备份丢失时无法用本工具还原，需重新安装 ZCode。
 - **定时任务还是按 UTC 触发**：时区补丁只对**补丁之后启动**的进程生效——先运行 `patch-zcode-timezone.bat`，再完全退出并重启 ZCode；仍不生效时在 PowerShell 里执行 `[Environment]::GetEnvironmentVariable('TZ','User')`，应输出 `Asia/Shanghai`。Git Bash 的 `date` 显示 GMT 属正常现象（MSYS 不识别 IANA 时区名），不代表补丁失效。
-- **累计 Token 数还是越来越少**：用量保留补丁只对**补丁之后写入**的数据生效——先退出 ZCode，运行 `patch-zcode-usage.bat`（工具箱 `[6]`）再启动；打补丁前已被清理的历史无法找回。验证方法：PowerShell 在 `resources\glm\zcode.cjs` 中搜索 `hos=9e15`，能搜到即补丁在位；搜到 `mos*24*60*60*1e3` 则是未打或已还原状态。
-- **提示 title fix already present / 上游已修复**：ZCode 3.14.3 起官方已修复标题自动生成。v10 补丁（3.17.2）基于官方新链路改造，不再依赖此提示；3.14.1 的旧版补丁保留在 GitHub Release `zcode-3.14.1`。
+- **累计 Token 数还是越来越少**：3.18.2 起官方已不再清理用量表，若累计值仍在下降，先确认补丁脚本输出的是 `this build keeps usage history itself`（说明构建内已无按时间删除语句），再检查是否是界面查询区间（`queryAppUsage` 的 `since/until`）导致的显示范围问题。3.17.2 及更早版本：用量保留补丁只对**补丁之后写入**的数据生效——先退出 ZCode，运行 `patch-zcode-usage.bat`（工具箱 `[6]`）再启动；打补丁前已被清理的历史无法找回。验证方法：PowerShell 在 `resources\glm\zcode.cjs` 中搜索 `hos=9e15`，能搜到即补丁在位；搜到 `mos*24*60*60*1e3` 则是未打或已还原状态。
+- **提示 title fix already present / 上游已修复**：ZCode 3.14.3 起官方已修复标题自动生成。v11 补丁（3.18.2）基于官方新链路改造，不再依赖此提示；`patch-zcode-title.ps1`（3.12.3/3.14.1 签名表）在 3.18.2 上会直接提示「不适用」并退出，不会写文件。3.14.1 的旧版补丁保留在 GitHub Release `zcode-3.14.1`。
 - **还原用量补丁时提示 unknown state**：目标文件的补丁片段与脚本签名不匹配（通常是 ZCode 版本更新），脚本拒绝盲写。确认后可删除目标目录中的 `zcode.cjs.usage-backup` 让脚本重建基线，或等工具包适配新版本。
 - **升级后主页大 Z 又出现了**：升级覆盖了 `app.asar`，水印 CSS 块随新版丢失——重跑 `patch-zcode-draft-logo.bat`（工具箱 `[17]`）即可；若新版改了水印 DOM，表现为 Z 消失但文字也不出现，先用 `[19]` 还原再等适配。
 - **托盘图标没变 / 开始菜单还是旧图标**：托盘与窗口图标读的是 `resources` 下的文件，必须完全退出 ZCode 再启动；开始菜单图标来自 `.lnk`，若 `C:\ProgramData` 下那条写入失败（脚本提示 `[warn] shortcut not updated`），用管理员身份跑一次 `patch-zcode-icon.bat`，或右键快捷方式「属性 → 更改图标」手动指向 `resources\tray_icon.ico`。
