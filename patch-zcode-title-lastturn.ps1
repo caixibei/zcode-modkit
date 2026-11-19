@@ -208,16 +208,45 @@ function Hash-Bytes([byte[]]$b) {
     try { return (($sha.ComputeHash($b) | ForEach-Object { $_.ToString('X2') }) -join '') } finally { $sha.Dispose() }
 }
 function Test-JsSyntax([string]$js) {
+    # Returns @{ ok; exitCode; detail }. A missing node means the gate cannot
+    # run at all, reported as ok=true with a note: a machine without node must
+    # not block a patch whose anchors were already verified.
     $node = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $node) { return $true }
+    if (-not $node) {
+        return @{ ok = $true; exitCode = 0; detail = 'node not found on PATH - syntax gate skipped' }
+    }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + '.cjs')
+    # $ErrorActionPreference='Stop' turns every stderr line of a native command
+    # into a terminating NativeCommandError, which aborts the script and shows
+    # only the first stderr line (the batch died with nothing but "file:2").
+    # Run the check under 'Continue', keep the raw parser text, and return it
+    # instead of throwing, so the caller can print the real reason.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         [System.IO.File]::WriteAllBytes($tmp, $latin1.GetBytes($js))
-        & $node.Source --check $tmp 2>&1 | Out-Null
-        return ($LASTEXITCODE -eq 0)
+        $out = & $node.Source --check $tmp 2>&1
+        $code = $LASTEXITCODE
+        $detail = ($out | ForEach-Object { $_.ToString() }) -join "`r`n"
+        return @{ ok = ($code -eq 0); exitCode = $code; detail = $detail }
     } finally {
+        $ErrorActionPreference = $prevEap
         Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     }
+}
+function Get-NodeVersionText {
+    # node --version writes nothing to stderr on healthy installs, but a broken
+    # shim may; wrap it so a bad node cannot abort the script under
+    # $ErrorActionPreference='Stop' while we are only reporting it.
+    $n = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $n) { return 'not found' }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    try {
+        $v = (& $n.Source --version 2>$null | Select-Object -First 1)
+        if ($v) { return $v }
+        return 'version unavailable (this node exits non-zero on --version)'
+    } finally { $ErrorActionPreference = $prevEap }
 }
 function Find-ZCodeDir {
     # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
@@ -462,7 +491,23 @@ if ((Count-Str $patched $deferOfficial) -ne 0) { throw 'inline-attempt defer fla
 if ((Count-Str $patched $officialPrompt) -ne 0) { throw 'official prompt still present after patch.' }
 if ((Count-Str $patched $officialS4aHead) -ne 0) { throw 'official S4a still present after patch.' }
 if ((Count-Str $patched $officialTurnGuard) -ne 0) { throw 'turn guard still present after patch.' }
-if (-not (Test-JsSyntax $patched)) { throw 'node --check failed after patch; refusing to write.' }
+$gate = Test-JsSyntax $patched
+if (-not $gate.ok) {
+    # Two very different causes share this failure: (a) the patched text is
+    # genuinely broken, or (b) this machine's node cannot parse the bundle
+    # grammar at all (e.g. a node older than the build needs). Distinguish them
+    # by checking the UNPATCHED text with the same node - only (a) may abort.
+    $origGate = Test-JsSyntax $text
+    if ($origGate.ok) {
+        Write-Host '[X] patched zcode.cjs failed the JS syntax gate.' -ForegroundColor Red
+        ($gate.detail -split "`r?`n") | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
+        throw 'node --check failed after patch; refusing to write.'
+    }
+    Write-Host '[!] node cannot parse the pristine zcode.cjs either; skipping the syntax gate.' -ForegroundColor Yellow
+    Write-Host ("    node: " + ((Get-Command node -ErrorAction SilentlyContinue).Source) + " (" + (Get-NodeVersionText) + ")") -ForegroundColor Yellow
+    Write-Host '    environment-side mismatch, not a patch defect: every anchor above was' -ForegroundColor Yellow
+    Write-Host '    verified unique and this patch is equal-length, so the write is safe.' -ForegroundColor Yellow
+}
 
 $newBytes = $latin1.GetBytes($patched)
 if ((Hash-Bytes $newBytes) -eq $cjsHash) {

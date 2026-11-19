@@ -93,7 +93,7 @@ ZCode 桌面客户端补丁工具包，包含十个独立补丁与一个统一�
 
 ## 环境要求
 
-- Windows 10 / 11（仅需系统自带 PowerShell，无第三方依赖；还原脚本的可选语法检查用到 Node.js，未安装时自动跳过）
+- Windows 10 / 11（仅需系统自带 PowerShell，无第三方依赖；标题补丁写入前的语法检查用到 Node.js——未安装时自动跳过，版本与 3.18.2 语法不兼容时会提示并跳过，不会阻断打补丁）
 - ZCode 桌面版 3.18.2（Electron 应用，安装目录含 `resources\app.asar`）
 
 ## 使用方法
@@ -723,6 +723,7 @@ CSS 按**字体族名**精确匹配，系统里需安装同名族名的字体文
 - **托盘图标没变 / 开始菜单还是旧图标**：托盘与窗口图标读的是 `resources` 下的文件，必须完全退出 ZCode 再启动；开始菜单图标来自 `.lnk`，若 `C:\ProgramData` 下那条写入失败（脚本提示 `[warn] shortcut not updated`），用管理员身份跑一次 `patch-zcode-icon.bat`，或右键快捷方式「属性 → 更改图标」手动指向 `resources\tray_icon.ico`。
 - **换了图标颜色但桌面/开始菜单还是旧颜色**：资源管理器按**路径**缓存图标，同一个 `tray_icon.ico` 换内容它会继续显示旧位图。本补丁现在把快捷方式指向 `resources\zcode-icon-<内容哈希>.ico`（每次换色文件名都变，旧文件自动清理），因此换色必定刷新；若仍不刷新，退出 ZCode 后运行 `powershell -File patch-zcode-icon.ps1 -RestartExplorer`（会重启 explorer.exe，已打开的文件夹窗口会关闭），或注销/重启一次。
 - **想换回 ZCode 原图标**：运行 `restore-zcode-icon.bat`（工具箱 `[20]`）；若 `app-icon-backup\` 不存在，脚本会用 `icon\app-icon-original.ico`（出厂基线）重建。
+- **新机上标题补丁报 `node.exe : …临时文件….cjs:2` 加 `NativeCommandError`、脚本中断**：这是补丁写入前的语法检查（`node --check`）被终止。先确认本机 Node 能否解析这份 bundle：执行 `node --version`（3.18.2 的 `zcode.cjs` 需要较新的 Node，本工具包在 v22 上验证通过）。脚本已做**自校准**：若 Node 连**未打补丁**的原始 `zcode.cjs` 都解析不了，判定为环境侧不兼容，打印 `skipping the syntax gate` 后继续打补丁，不再中断；只有「原始文件能解析、补丁产物不能解析」时才拒绝写入并打印完整语法错误。想彻底避免，安装较新的 Node.js（v20+）并确保其在 `PATH` 上。
 
 ## Star History
 

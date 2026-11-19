@@ -90,16 +90,44 @@ function Count-Str([string]$hay, [string]$s) {
     return ([regex]::Matches($hay, [regex]::Escape($s))).Count
 }
 function Test-JsSyntax([string]$js) {
+    # Returns @{ ok; exitCode; detail }. A missing node means the gate cannot
+    # run at all, reported as ok=true with a note: a machine without node must
+    # not block a reverse whose fragments were already verified.
     $node = Get-Command node -ErrorAction SilentlyContinue
-    if (-not $node) { return $true }
+    if (-not $node) {
+        return @{ ok = $true; exitCode = 0; detail = 'node not found on PATH - syntax gate skipped' }
+    }
     $tmp = Join-Path ([System.IO.Path]::GetTempPath()) ([System.IO.Path]::GetRandomFileName() + '.cjs')
+    # $ErrorActionPreference='Stop' turns every stderr line of a native command
+    # into a terminating NativeCommandError, which aborts the script and shows
+    # only the first stderr line. Run the check under 'Continue', keep the raw
+    # parser text, and return it instead of throwing.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     try {
         [System.IO.File]::WriteAllBytes($tmp, $latin1.GetBytes($js))
-        & $node.Source --check $tmp 2>&1 | Out-Null
-        return ($LASTEXITCODE -eq 0)
+        $out = & $node.Source --check $tmp 2>&1
+        $code = $LASTEXITCODE
+        $detail = ($out | ForEach-Object { $_.ToString() }) -join "`r`n"
+        return @{ ok = ($code -eq 0); exitCode = $code; detail = $detail }
     } finally {
+        $ErrorActionPreference = $prevEap
         Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     }
+}
+function Get-NodeVersionText {
+    # node --version writes nothing to stderr on healthy installs, but a broken
+    # shim may; wrap it so a bad node cannot abort the script under
+    # $ErrorActionPreference='Stop' while we are only reporting it.
+    $n = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $n) { return 'not found' }
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'SilentlyContinue'
+    try {
+        $v = (& $n.Source --version 2>$null | Select-Object -First 1)
+        if ($v) { return $v }
+        return 'version unavailable (this node exits non-zero on --version)'
+    } finally { $ErrorActionPreference = $prevEap }
 }
 function Find-ZCodeDir {
     # toolbox resolves the folder once and passes it down (ZCODE_RESOURCES_DIR),
@@ -166,6 +194,10 @@ if ($procs -and -not $TargetCjs) {
 
 $bytes = [System.IO.File]::ReadAllBytes($cjsPath)
 $text  = $latin1.GetString($bytes)
+# pristine copy of the file as it sits on disk (patched state): used by the
+# syntax gate below to tell a broken reverse apart from a node that cannot
+# parse this bundle's grammar at all
+$rawText = $text
 $isCleanNow = ((Count-Str $text $officialPrompt) -eq 1 -and (Count-Str $text $officialS4a) -eq 1 -and (Count-Str $text $officialB4a) -eq 1 -and (Count-Str $text $v9Marker) -eq 0)
 $isV9 = ((Count-Str $text $v9Marker) -ge 2)
 
@@ -288,7 +320,23 @@ if ((Count-Str $text $officialS4a) -ne 1) { throw 'official Ltc not restored.' }
 if ((Count-Str $text $officialB4a) -ne 1) { throw 'official Ntc not restored.' }
 if ((Count-Str $text $officialZkt) -ne 1) { throw 'official nRt call not restored.' }
 if ((Count-Str $text $officialWwn) -ne 1) { throw 'official t3n attempt not restored.' }
-if (-not (Test-JsSyntax $text)) { throw 'node --check failed after reverse; refusing to write.' }
+$gate = Test-JsSyntax $text
+if (-not $gate.ok) {
+    # The file on disk (patched state) is the environment-compatibility
+    # reference: if this node cannot parse what is already there, the failure
+    # is environmental, not caused by the reverse. Only a reverse that this
+    # node accepts on disk but rejects after the reverse may abort the write.
+    $origGate = Test-JsSyntax $rawText
+    if ($origGate.ok) {
+        Write-Host '[X] reversed zcode.cjs failed the JS syntax gate.' -ForegroundColor Red
+        ($gate.detail -split "`r?`n") | ForEach-Object { Write-Host ("    " + $_) -ForegroundColor DarkYellow }
+        throw 'node --check failed after reverse; refusing to write.'
+    }
+    Write-Host '[!] node cannot parse the current zcode.cjs either; skipping the syntax gate.' -ForegroundColor Yellow
+    Write-Host ("    node: " + ((Get-Command node -ErrorAction SilentlyContinue).Source) + " (" + (Get-NodeVersionText) + ")") -ForegroundColor Yellow
+    Write-Host '    environment-side mismatch, not a reverse defect: the reverse is equal-length' -ForegroundColor Yellow
+    Write-Host '    and every official fragment was verified to be present exactly once.' -ForegroundColor Yellow
+}
 [System.IO.File]::WriteAllBytes($cjsPath, $latin1.GetBytes($text))
 Write-Host '[2/3] v11 additions reversed; file is back to the official 3.18.2 title chain.'
 
